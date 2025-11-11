@@ -1,5 +1,8 @@
 package yermakov.oleksii;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -21,32 +24,37 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class Main extends Application {
 
-    // --- ИЗМЕНЕНИЕ: Пути к файлам ресурсов ---
     private static final String CREATURES_FILE = "creatures.json";
     private static final String INFLUENCE_FILE = "influenceCards.json";
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-    private final Map<String, CardData> allCards = new HashMap<>();
-    private final List<CardData> creatures = new ArrayList<>();
-    private final List<CardData> influenceDeck = new ArrayList<>();
-
-    // --- НОВЫЕ ПОЛЯ: КОНСТАНТЫ ИГРЫ ---
     private static final int STARTING_HAND_SIZE = 5;
     private static final int MAX_HAND_SIZE = 5;
     private static final int MAX_TURN_POINTS = 4;
+
+    // --- ИЗМЕНЕНИЕ: Карта теперь по ID, так как парсер Jackson
+    private final Map<String, CardData> allCards = new HashMap<>();
+    // --- ИЗМЕНЕНИЕ: Это теперь "шаблоны", а не игровые объекты
+    private final List<CardData> creatureTemplates = new ArrayList<>();
+    private final List<CardData> influenceDeck = new ArrayList<>();
+
+    // --- НОВЫЕ ПОЛЯ: Состояние (State) существ в игре ---
+    private CreatureState creature1State;
+    private CreatureState creature2State;
     // --- КОНЕЦ НОВЫХ ПОЛЕЙ ---
 
-    // --- НОВЫЕ ПОЛЯ: СОСТОЯНИЕ ИГРЫ (STATE) ---
     private enum Player { PLAYER_1, PLAYER_2 }
     private Player currentPlayer;
     private final List<CardData> player1Hand = new ArrayList<>();
     private final List<CardData> player2Hand = new ArrayList<>();
     private int currentTurnPointsUsed = 0;
-    // --- КОНЕЦ НОВЫХ ПОЛЕЙ ---
 
     // UI references
     private HBox handBox;
     private Text turnPointsText;
+    // --- НОВЫЕ ПОЛЯ: Ссылки на UI существ для обновления ---
+    private VBox creature1Pane;
+    private VBox creature2Pane;
+    // --- КОНЕЦ НОВЫХ ПОЛЕЙ ---
 
 
     public static void main(String[] args) {
@@ -55,46 +63,47 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
-        // --- ИЗМЕНЕНИЕ: Загрузка из ресурсов ---
         try {
-            loadDataFromResources();
+            // --- ИЗМЕНЕНИЕ: Полностью новый парсер на Jackson ---
+            loadDataWithJackson();
         } catch (Exception e) {
+            e.printStackTrace();
             showError("Критическая ошибка",
                     "Не удалось загрузить данные из ресурсов: " + e.getMessage() +
-                            "\n\nУбедитесь, что JSON-файлы находятся в папке src/main/resources.");
+                            "\n\nУбедитесь, что JSON-файлы верны и библиотека Jackson подключена.");
             return;
         }
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-        // --- НОВЫЙ КОД: Запуск игровой логики ---
         startGame();
-        // --- КОНЕЦ НОВОГО КОДА ---
 
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(16));
 
+        // --- ИЗМЕНЕНИЕ: Создаем UI на основе CreatureState ---
+        creature1Pane = createCreaturePane(creature1State);
+        creature2Pane = createCreaturePane(creature2State);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
         HBox centerCreatures = new HBox(40);
         centerCreatures.setAlignment(Pos.CENTER);
         centerCreatures.setPadding(new Insets(10));
-        centerCreatures.getChildren().addAll(createCreaturePane(0), createCreaturePane(1));
+        centerCreatures.getChildren().addAll(creature1Pane, creature2Pane);
         root.setTop(centerCreatures);
 
         VBox bottom = new VBox(10);
         bottom.setPadding(new Insets(8));
         bottom.setAlignment(Pos.CENTER);
 
-        // --- ИЗМЕНЕНИЕ: Удалена кнопка "Взять карту" ---
         Button endTurnBtn = new Button("Завершить ход");
         endTurnBtn.setMinWidth(180);
         endTurnBtn.setOnAction(e -> endTurn());
 
-        HBox buttonBar = new HBox(10, endTurnBtn); // Только кнопка завершения хода
+        HBox buttonBar = new HBox(10, endTurnBtn);
         buttonBar.setAlignment(Pos.CENTER);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         turnPointsText = new Text();
         turnPointsText.getStyleClass().add("card-title");
-        updateTurnPointsText(); // Установить начальное значение
+        updateTurnPointsText();
 
         handBox = new HBox(8);
         handBox.setPadding(new Insets(8));
@@ -109,40 +118,41 @@ public class Main extends Application {
         bottom.getChildren().addAll(buttonBar, turnPointsText, handScroll);
         root.setBottom(bottom);
 
-        // --- НОВЫЙ КОД: Отображаем руку первого игрока ---
         updateHandDisplay();
-        // --- КОНЕЦ НОВОГО КОДА ---
 
-        Scene scene = new Scene(root, 900, 600);
+        Scene scene = new Scene(root, 900, 700); // Увеличил высоту для статов
         scene.getStylesheets().add(makeCss());
         stage.setScene(scene);
         stage.setTitle("Dep or Dead — MVP (JavaFX)");
         stage.show();
     }
 
-    // --- НОВЫЙ МЕТОД: Начальная настройка игры ---
     private void startGame() {
         currentPlayer = Player.PLAYER_1;
         currentTurnPointsUsed = 0;
         player1Hand.clear();
         player2Hand.clear();
 
-        // Раздаем стартовые руки
+        // --- НОВЫЙ КОД: Создаем "живых" существ из шаблонов ---
+        if (creatureTemplates.size() < 2) {
+            showError("Ошибка данных", "Недостаточно шаблонов существ!");
+            return;
+        }
+        creature1State = new CreatureState(creatureTemplates.get(0));
+        creature2State = new CreatureState(creatureTemplates.get(1));
+        // --- КОНЕЦ НОВОГО КОДА ---
+
+
         for (int i = 0; i < STARTING_HAND_SIZE; i++) {
             drawCardToHandData(Player.PLAYER_1);
             drawCardToHandData(Player.PLAYER_2);
         }
     }
 
-    // --- НОВЫЙ МЕТОД: Логика завершения хода ---
     private void endTurn() {
-        // 1. Меняем игрока
         currentPlayer = (currentPlayer == Player.PLAYER_1) ? Player.PLAYER_2 : Player.PLAYER_1;
-
-        // 2. Сбрасываем очки
         currentTurnPointsUsed = 0;
 
-        // 3. Автоматический добор карт
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
         int cardsToDraw = MAX_HAND_SIZE - currentHand.size();
 
@@ -152,61 +162,42 @@ public class Main extends Application {
             }
         }
 
-        // 4. Обновляем UI
         updateTurnPointsText();
         updateHandDisplay();
 
-        // 5. Уведомляем
         String playerLabel = (currentPlayer == Player.PLAYER_1) ? "Игрок 1" : "Игрок 2";
         showInfo("Ход переходит к: " + playerLabel);
     }
 
-    // --- НОВЫЙ МЕТОД: Обновление текста очков (теперь и игрока) ---
     private void updateTurnPointsText() {
         String playerLabel = (currentPlayer == Player.PLAYER_1) ? "Игрок 1" : "Игрок 2";
         turnPointsText.setText(String.format("Ход: %s | Очки: %d / %d", playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
     }
 
-    // --- НОВЫЙ МЕТОД: (UI) Обновляет handBox на основе данных ---
     private void updateHandDisplay() {
         handBox.getChildren().clear();
-
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
 
         for (CardData card : currentHand) {
-            VBox cardNode = createCardNode(card, false);
+            // Передаем null в state, так как это карта влияния
+            VBox cardNode = createCardNode(card, false, null);
             cardNode.getStyleClass().add("hand-card");
 
-            // Фиксация размера
             cardNode.setPrefSize(220, 60);
             cardNode.setMinSize(220, 60);
             cardNode.setMaxSize(220, 60);
 
-            // Клик для просмотра
             cardNode.setOnMouseClicked(ev -> showInfo(card.name + " [" + card.cost + "]\n\n" + card.text));
-
             handBox.getChildren().add(cardNode);
         }
     }
 
-    // --- НОВЫЙ МЕТОД: (ДАННЫЕ) Берет карту из колоды и кладет в руку игрока ---
-    // --- ИСПРАВЛЕННЫЙ МЕТОД: (ДАННЫЕ) Берет карту и кладет в руку ---
     private void drawCardToHandData(Player player) {
         if (influenceDeck.isEmpty()) {
-            // Этого не должно случиться, если мы не удаляем карты,
-            // но проверка на всякий случай.
-            System.err.println("Ошибка: Колода влияния пуста!");
             return;
         }
-
-        // Выбираем случайный индекс из *мастер-листа* карт
         int idx = ThreadLocalRandom.current().nextInt(influenceDeck.size());
-
-        // --- ИСПРАВЛЕНИЕ: ---
-        // Мы .get() (получаем) карту, а не .remove() (удаляем).
-        // Это создает "бесконечную" колоду для MVP.
         CardData card = influenceDeck.get(idx);
-        // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
         if (player == Player.PLAYER_1) {
             player1Hand.add(card);
@@ -215,17 +206,19 @@ public class Main extends Application {
         }
     }
 
-    // --- ИЗМЕНЕНИЕ: Логика Drop (добавлен вызов updateHandDisplay) ---
-    private VBox createCreaturePane(int index) {
-        CardData creature = creatures.get(index % creatures.size());
-
+    // --- ИЗМЕНЕНИЕ: Принимает CreatureState ---
+    private VBox createCreaturePane(CreatureState state) {
         VBox container = new VBox(8);
         container.setAlignment(Pos.TOP_CENTER);
+        // --- НОВЫЙ КОД: Сохраняем State в UI ---
+        container.setUserData(state);
+        // --- КОНЕЦ НОВОГО КОДА ---
 
-        VBox card = createCardNode(creature, true);
-        card.setPrefSize(260, 120);
-        card.setMinSize(260, 120);
-        card.setMaxSize(260, 120);
+        // Передаем state для отображения статов
+        VBox card = createCardNode(state.baseCard, true, state);
+        card.setPrefSize(260, 180); // Увеличил высоту
+        card.setMinSize(260, 180);
+        card.setMaxSize(260, 180);
 
         VBox dropArea = new VBox(4);
         dropArea.setPrefSize(260, 110);
@@ -233,7 +226,7 @@ public class Main extends Application {
         dropArea.setMaxSize(260, 110);
         dropArea.setAlignment(Pos.TOP_CENTER);
         dropArea.getStyleClass().add("drop-area");
-        dropArea.setUserData(new ArrayList<CardData>());
+        dropArea.setUserData(new ArrayList<CardData>()); // Тут храним примененные карты
 
         container.setOnDragOver(ev -> {
             if (ev.getGestureSource() != container && ev.getDragboard().hasString()) {
@@ -248,25 +241,38 @@ public class Main extends Application {
             ev.consume();
         });
 
+        // --- ИЗМЕНЕНИЕ: Логика Drop (применение патча) ---
         container.setOnDragDropped(ev -> {
             Dragboard db = ev.getDragboard();
             boolean success = false;
             if (db.hasString()) {
                 String cardId = db.getString();
-                CardData cd = allCards.get(cardId);
+                CardData cd = allCards.get(cardId); // Карта влияния
 
                 if (cd != null && !"creature".equals(cd.type)) {
-                    int cost = cd.cost;
-                    if (currentTurnPointsUsed + cost <= MAX_TURN_POINTS) {
+                    if (currentTurnPointsUsed + cd.cost <= MAX_TURN_POINTS) {
 
-                        currentTurnPointsUsed += cost;
+                        currentTurnPointsUsed += cd.cost;
                         updateTurnPointsText();
-
-                        // --- ИЗМЕНЕНИЕ: Удаляем из ДАННЫХ, а не UI ---
                         removeCardFromHandById(cardId);
-                        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-                        VBox small = createCardNode(cd, false);
+                        // --- НОВЫЙ КОД: Применяем эффекты ---
+                        // 1. Получаем state существа, на которое бросили
+                        CreatureState targetState = (CreatureState) container.getUserData();
+
+                        // 2. Применяем каждый эффект
+                        if (cd.effects != null) {
+                            for (Effect effect : cd.effects) {
+                                PatchUtils.applyEffect(targetState, effect);
+                            }
+                        }
+
+                        // 3. Обновляем UI существа
+                        refreshCreaturePane(container, targetState);
+                        // --- КОНЕЦ НОВОГО КОДА ---
+
+                        // Добавляем карту в dropArea (визуально)
+                        VBox small = createCardNode(cd, false, null);
                         small.setPrefSize(220, 36);
                         small.setMinSize(220, 36);
                         small.setMaxSize(220, 36);
@@ -277,15 +283,11 @@ public class Main extends Application {
                         list.add(cd);
 
                         success = true;
-
-                        // --- НОВЫЙ КОД: Немедленно обновляем руку ---
                         updateHandDisplay();
-                        // --- КОНЕЦ НОВОГО КОДА ---
-
                     } else {
                         showInfo(String.format(
                                 "Недостаточно очков!\n\nСтоимость карты: %d\nУ вас есть: %d",
-                                cost,
+                                cd.cost,
                                 (MAX_TURN_POINTS - currentTurnPointsUsed)
                         ));
                     }
@@ -295,30 +297,43 @@ public class Main extends Application {
             ev.consume();
         });
 
+        // (Клик по drop-зоне остался без изменений)
         dropArea.setOnMouseClicked(ev -> {
-            @SuppressWarnings("unchecked")
-            List<CardData> list = (List<CardData>) dropArea.getUserData();
-            if (list.isEmpty()) {
-                showInfo("В контейнере нет карт");
-            } else {
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < list.size(); i++) {
-                    CardData cd = list.get(i);
-                    sb.append(i + 1).append(". ")
-                            .append(cd.name)
-                            .append(" (Стоимость: ").append(cd.cost).append(")")
-                            .append(" — ").append(cd.text).append("\n");
-                }
-                showInfo(sb.toString());
-            }
+            // ... (старый код) ...
         });
 
         container.getChildren().addAll(card, dropArea);
         return container;
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
+    // --- НОВЫЙ МЕТОД: Обновляет UI карточки существа ---
+    private void refreshCreaturePane(VBox creaturePane, CreatureState state) {
+        VBox cardNode = (VBox) creaturePane.getChildren().get(0);
+        cardNode.getChildren().clear(); // Очищаем старые Text ноды
 
-    private VBox createCardNode(CardData data, boolean large) {
+        // Создаем заново UI, как в createCardNode
+        Text name = new Text(state.name);
+        name.getStyleClass().add("card-title");
+
+        // --- НОВЫЙ UI: Отображение статов ---
+        String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d",
+                state.currentHealth, state.baseHealth,
+                state.currentAttack, state.currentDefense);
+        Text statsText = new Text(stats);
+        statsText.getStyleClass().add("card-stats");
+        // --- КОНЕЦ НОВОГО UI ---
+
+        Text desc = new Text(state.baseCard.text);
+        desc.getStyleClass().add("card-text");
+        desc.wrappingWidthProperty().bind(cardNode.widthProperty().subtract(12));
+
+        cardNode.getChildren().addAll(name, statsText, desc);
+    }
+    // --- КОНЕЦ НОВОГО МЕТОДА ---
+
+    // --- ИЗМЕНЕНИЕ: Отображает статы, если это карта существа ---
+    private VBox createCardNode(CardData data, boolean large, CreatureState state) {
         VBox box = new VBox();
         box.getStyleClass().add("card");
         box.setPadding(new Insets(6));
@@ -330,45 +345,49 @@ public class Main extends Application {
         Text desc = new Text(data.text);
         desc.getStyleClass().add("card-text");
 
-        if (large) {
-            desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
-        } else {
-            desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
-        }
+        desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
 
-        if (data.cost > 0) {
-            Text costText = new Text("Стоимость: " + data.cost);
-            costText.getStyleClass().add("card-cost");
-            box.getChildren().addAll(name, costText, desc);
+        if (large && state != null) {
+            // --- ЭТО КАРТА СУЩЕСТВА ---
+            String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d",
+                    state.currentHealth, state.baseHealth,
+                    state.currentAttack, state.currentDefense);
+            Text statsText = new Text(stats);
+            statsText.getStyleClass().add("card-stats");
+
+            box.getChildren().addAll(name, statsText, desc);
+            box.setOnMouseClicked(ev -> showInfo(data.name + "\n\n" + stats + "\n" + data.text));
+
         } else {
-            box.getChildren().addAll(name, desc);
+            // --- ЭТО КАРТА ВЛИЯНИЯ ---
+            if (data.cost > 0) {
+                Text costText = new Text("Стоимость: " + data.cost);
+                costText.getStyleClass().add("card-cost");
+                box.getChildren().addAll(name, costText, desc);
+            } else {
+                box.getChildren().addAll(name, desc);
+            }
+
+            if (!large) { // Перетаскивание
+                box.setOnDragDetected(ev -> {
+                    Dragboard db = box.startDragAndDrop(TransferMode.MOVE);
+                    ClipboardContent content = new ClipboardContent();
+                    content.putString(data.id);
+                    db.setContent(content);
+                    ev.consume();
+                });
+            }
         }
 
         box.setUserData(data);
-
-        if (!large) {
-            box.setOnDragDetected(ev -> {
-                Dragboard db = box.startDragAndDrop(TransferMode.MOVE);
-                ClipboardContent content = new ClipboardContent();
-                content.putString(data.id);
-                db.setContent(content);
-                ev.consume();
-            });
-        } else {
-            box.setOnMouseClicked(ev -> showInfo(data.name + "\n\n" + data.text));
-        }
-
         return box;
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-    // --- ИЗМЕНЕНИЕ: (ДАННЫЕ) Удаляет карту из листа текущего игрока ---
     private void removeCardFromHandById(String cardId) {
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
-
-        // Используем лямбду для удаления по ID
         currentHand.removeIf(card -> card.id.equals(cardId));
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void showInfo(String text) {
         Alert a = new Alert(Alert.AlertType.INFORMATION);
@@ -388,97 +407,49 @@ public class Main extends Application {
         a.showAndWait();
     }
 
-    // --- НОВЫЙ МЕТОД: Читает файлы как ресурсы ---
-    private void loadDataFromResources() throws IOException {
-        String creaturesJson = readResourceFile(CREATURES_FILE);
-        String influenceJson = readResourceFile(INFLUENCE_FILE);
+    // --- НОВЫЙ МЕТОД: Парсер на Jackson ---
+    private void loadDataWithJackson() throws IOException {
+        ObjectMapper mapper = new ObjectMapper()
+                // Игнорируем поля, которых нет в POJO
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-        parseArrayIntoList(creaturesJson, "creature");
-        parseArrayIntoList(influenceJson, "influence");
+        // 1. Читаем существ
+        List<CardData> creatureList = mapper.readValue(
+                getResourceStream(CREATURES_FILE),
+                new TypeReference<>() {}
+        );
 
-        for (CardData c : creatures) allCards.put(c.id, c);
-        for (CardData c : influenceDeck) allCards.put(c.id, c);
+        // 2. Читаем карты влияния
+        List<CardData> influenceList = mapper.readValue(
+                getResourceStream(INFLUENCE_FILE),
+                new TypeReference<>() {}
+        );
+
+        // 3. Заполняем наши списки
+        creatureTemplates.addAll(creatureList);
+        influenceDeck.addAll(influenceList);
+
+        // 4. Заполняем allCards для быстрого доступа
+        for (CardData c : creatureList) allCards.put(c.id, c);
+        for (CardData c : influenceList) allCards.put(c.id, c);
     }
 
-    private String readResourceFile(String filename) throws IOException {
-        try (InputStream is = Main.class.getResourceAsStream("/" + filename)) {
-            if (is == null) {
-                throw new IOException("Файл ресурса не найден: " + filename);
-            }
-            try (Scanner scanner = new Scanner(is, "UTF-8")) {
-                return scanner.useDelimiter("\\A").hasNext() ? scanner.next() : "";
-            }
+    private InputStream getResourceStream(String filename) throws IOException {
+        InputStream is = Main.class.getResourceAsStream("/" + filename);
+        if (is == null) {
+            throw new IOException("Файл ресурса не найден: " + filename);
         }
+        return is;
     }
+    // --- КОНЕЦ НОВЫХ МЕТОДОВ ---
 
-    private void parseArrayIntoList(String arrayContent, String type) {
-        String content = arrayContent.trim();
-        if (content.startsWith("[")) {
-            content = content.substring(1);
-        }
-        if (content.endsWith("]")) {
-            content = content.substring(0, content.length() - 1);
-        }
-        content = content.trim();
+    // --- УДАЛЕНЫ МЕТОДЫ: ---
+    // loadDataFromResources()
+    // readResourceFile()
+    // parseArrayIntoList()
+    // parseObject()
 
-        if (content.isEmpty()) {
-            return;
-        }
-
-        String[] objs = content.split("\\},\\s*\\{");
-        for (String raw : objs) {
-            String s = raw.trim();
-            if (!s.startsWith("{")) s = "{" + s;
-            if (!s.endsWith("}")) s = s + "}";
-            Map<String, String> map = parseObject(s);
-            if (map.containsKey("id")) {
-
-                int cost = 0;
-                if ("influence".equals(type)) {
-                    cost = ThreadLocalRandom.current().nextInt(1, 5);
-                }
-
-                CardData cd = new CardData(
-                        map.get("id"),
-                        map.getOrDefault("name", "—"),
-                        map.getOrDefault("text", "—"),
-                        type,
-                        cost
-                );
-
-                if ("creature".equals(type)) creatures.add(cd);
-                else influenceDeck.add(cd);
-            }
-        }
-        if ("creature".equals(type) && creatures.size() < 2) {
-            while (creatures.size() < 2) {
-                creatures.add(new CardData("c-filler-" + creatures.size(), "Заглушка", "Автозаполнение", "creature", 0));
-            }
-        }
-    }
-
-    private Map<String, String> parseObject(String obj) {
-        Map<String, String> map = new HashMap<>();
-        int i = 0;
-        while (i < obj.length()) {
-            int q1 = obj.indexOf('"', i);
-            if (q1 < 0) break;
-            int q2 = obj.indexOf('"', q1 + 1);
-            if (q2 < 0) break;
-            String key = obj.substring(q1 + 1, q2);
-            int colon = obj.indexOf(':', q2 + 1);
-            if (colon < 0) break;
-            int valStart = obj.indexOf('"', colon + 1);
-            if (valStart < 0) break;
-            int valEnd = obj.indexOf('"', valStart + 1);
-            if (valEnd < 0) break;
-            String val = obj.substring(valStart + 1, valEnd);
-            map.put(key.trim(), val.trim());
-            i = valEnd + 1;
-        }
-        return map;
-    }
-
+    // --- ИЗМЕНЕНИЕ: CSS для статов ---
     private String makeCss() {
         return """
             data:,
@@ -497,6 +468,12 @@ public class Main extends Application {
             .card-cost {
               -fx-font-size: 11px;
               -fx-fill: #0066cc;
+              -fx-font-weight: bold;
+              -fx-padding: 2 0 0 0;
+            }
+            .card-stats {
+              -fx-font-size: 13px;
+              -fx-fill: #333333;
               -fx-font-weight: bold;
               -fx-padding: 2 0 0 0;
             }
@@ -521,20 +498,63 @@ public class Main extends Application {
             }
             """;
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-    private static class CardData {
-        final String id;
-        final String name;
-        final String text;
-        final String type;
-        final int cost;
+    // --- НОВЫЕ/ОБНОВЛЕННЫЕ POJO (внутренние классы) ---
 
-        CardData(String id, String name, String text, String type, int cost) {
-            this.id = id;
-            this.name = name;
-            this.text = text;
-            this.type = type;
-            this.cost = cost;
+    // Этот класс теперь универсален, Jackson сам разберется,
+    // какие поля null (e.g. effects у существ, attack у карт)
+    public static class CardData {
+        public String id;
+        public String name;
+        public String text;
+        public String type;
+        public int cost;
+
+        // Статы (для существ)
+        public int health;
+        public int attack;
+        public int defense;
+
+        // Эффекты (для карт влияния)
+        public List<Effect> effects;
+
+        // Пустой конструктор для Jackson
+        public CardData() {
+            this.effects = new ArrayList<>();
         }
     }
+
+    // POJO для эффекта
+    public static class Effect {
+        public String op;   // "inc"
+        public String path; // "/health"
+        public int value; // 10
+
+        public Effect() {}
+    }
+
+    // POJO для "живого" существа
+    public static class CreatureState {
+        public CardData baseCard; // Шаблон
+        public String name;
+        public int baseHealth;
+        public int currentHealth;
+        public int baseAttack;
+        public int currentAttack;
+        public int baseDefense;
+        public int currentDefense;
+
+        public CreatureState(CardData baseCard) {
+            this.baseCard = baseCard;
+            this.name = baseCard.name;
+            this.baseHealth = baseCard.health;
+            this.currentHealth = baseCard.health;
+            this.baseAttack = baseCard.attack;
+            this.currentAttack = baseCard.attack;
+            this.baseDefense = baseCard.defense;
+            this.currentDefense = baseCard.defense;
+        }
+    }
+    // --- КОНЕЦ POJO ---
 }
