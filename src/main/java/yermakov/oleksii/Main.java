@@ -74,7 +74,6 @@ public class Main extends Application {
     @Override
     public void start(Stage stage) {
         try {
-            // --- ИЗМЕНЕНИЕ: Полностью новый парсер на Jackson ---
             loadDataWithJackson();
         } catch (Exception e) {
             e.printStackTrace();
@@ -89,16 +88,23 @@ public class Main extends Application {
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(16));
 
-        // --- ИЗМЕНЕНИЕ: Создаем UI на основе CreatureState ---
         creature1Pane = createCreaturePane(creature1State);
         creature2Pane = createCreaturePane(creature2State);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-        HBox centerCreatures = new HBox(40);
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) HBox верхнего ряда ---
+        HBox centerCreatures = new HBox(15); // Уменьшаем отступ
         centerCreatures.setAlignment(Pos.CENTER);
         centerCreatures.setPadding(new Insets(10));
-        centerCreatures.getChildren().addAll(creature1Pane, creature2Pane);
+
+        // Добавляем 2 стопки между существами
+        centerCreatures.getChildren().addAll(
+                creature1Pane,
+                createCentralDropZone("Стопка 1"),
+                createCentralDropZone("Стопка 2"),
+                creature2Pane
+        );
         root.setTop(centerCreatures);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         VBox bottom = new VBox(10);
         bottom.setPadding(new Insets(8));
@@ -117,23 +123,26 @@ public class Main extends Application {
 
         handBox = new HBox(8);
         handBox.setPadding(new Insets(8));
-        handBox.setAlignment(Pos.CENTER_LEFT);
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) Центрируем руку ---
+        handBox.setAlignment(Pos.CENTER);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         ScrollPane handScroll = new ScrollPane(handBox);
-        // --- ИЗМЕНЕНИЕ: Увеличена высота панели руки ---
-        handScroll.setPrefHeight(170);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+        handScroll.setPrefHeight(170); // Высота из прошлого запроса
         handScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         handScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         handScroll.setFitToHeight(true);
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) Ограничиваем ширину, чтобы панель центрировалась ---
+        handScroll.setMaxWidth(800);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         bottom.getChildren().addAll(buttonBar, turnPointsText, handScroll);
         root.setBottom(bottom);
 
         updateHandDisplay();
 
-        // --- ИЗМЕНЕНИЕ: Увеличил общую высоту окна ---
-        Scene scene = new Scene(root, 900, 730);
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Увеличиваем ширину окна ---
+        Scene scene = new Scene(root, 1200, 730);
         // --- КОНЕЦ ИЗМЕНЕНИЯ ---
         scene.getStylesheets().add(makeCss());
         stage.setScene(scene);
@@ -533,6 +542,26 @@ public class Main extends Application {
     }
     // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
+    // --- НОВЫЙ МЕТОD: (ЗАПРОС 1) Создает центральные стопки ---
+    private VBox createCentralDropZone(String title) {
+        VBox dropArea = new VBox(4);
+        // Делаем их по высоте как карта существа
+        dropArea.setPrefSize(220, 180);
+        dropArea.setMinSize(220, 180);
+        dropArea.setMaxSize(220, 180);
+        dropArea.setAlignment(Pos.CENTER);
+        dropArea.getStyleClass().add("drop-area");
+        dropArea.setUserData(new ArrayList<CardData>()); // Для будущего использования
+
+        Text label = new Text(title);
+        label.getStyleClass().add("card-text");
+        dropArea.getChildren().add(label);
+
+        // TODO: В будущем добавить сюда логику OnDragDropped
+
+        return dropArea;
+    }
+
     // --- НОВЫЙ МЕТОД: Обновляет UI карточки существа ---
     private void refreshCreaturePane(VBox creaturePane, CreatureState state) {
         VBox cardNode = (VBox) creaturePane.getChildren().get(0);
@@ -630,7 +659,7 @@ public class Main extends Application {
         return box;
     }    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-    // --- НОВЫЙ МЕТОД: (ЗАПРОС 3) Создает Text для статов ---
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Создает Text для 8 цветов ---
     private void addStatChangeText(HBox container, String prefix, int value, String styleType) {
         if (value == 0) {
             return; // Не показываем, если нет изменений
@@ -639,15 +668,13 @@ public class Main extends Application {
         String text = prefix + ": " + (value > 0 ? "+" : "") + value;
         Text statText = new Text(text);
 
-        // Выбираем стиль
+        // --- ИЗМЕНЕНИЕ: Генерируем 1 из 8 классов (н.п. card-stat-hp-pos) ---
         if (value > 0) {
-            statText.getStyleClass().add("card-stat-pos");
+            statText.getStyleClass().add("card-stat-" + styleType + "-pos");
         } else {
-            statText.getStyleClass().add("card-stat-neg");
+            statText.getStyleClass().add("card-stat-" + styleType + "-neg");
         }
-
-        // Добавляем специфичный стиль (hp, atk, def, rp) для разных цветов
-        statText.getStyleClass().add("card-stat-" + styleType);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         container.getChildren().add(statText);
     }
@@ -719,7 +746,7 @@ public class Main extends Application {
     // parseArrayIntoList()
     // parseObject()
 
-    // --- ИЗМЕНЕНИЕ: CSS для статов и RP ---
+    // --- ИЗМЕНЕНИЕ: CSS для 8 цветов ---
     private String makeCss() {
         return """
             data:,
@@ -743,20 +770,27 @@ public class Main extends Application {
             }
             
             /* --- НОВЫЕ СТИЛИ (ЗАПРОС 3) --- */
-            .card-stat-pos {
+            /* Общий стиль для всех 8 классов */
+            .card-stat-hp-pos, .card-stat-hp-neg,
+            .card-stat-atk-pos, .card-stat-atk-neg,
+            .card-stat-def-pos, .card-stat-def-neg,
+            .card-stat-rp-pos, .card-stat-rp-neg {
               -fx-font-size: 11px;
               -fx-font-weight: bold;
             }
-            .card-stat-neg {
-              -fx-font-size: 11px;
-              -fx-font-weight: bold;
-            }
+
+            /* 8-цветная реализация */
+            .card-stat-hp-pos  { -fx-fill: #00A800; } /* +HP (Яркий Зеленый) */
+            .card-stat-hp-neg  { -fx-fill: #597D35; } /* -HP (Темный Оливковый) */
             
-            /* Разные цвета для статов */
-            .card-stat-hp { -fx-fill: #008800; } /* Зеленый */
-            .card-stat-atk { -fx-fill: #cc0000; } /* Красный */
-            .card-stat-def { -fx-fill: #0066cc; } /* Синий */
-            .card-stat-rp { -fx-fill: #e69500; } /* Оранжевый */
+            .card-stat-atk-pos { -fx-fill: #E50000; } /* +ATK (Яркий Красный) */
+            .card-stat-atk-neg { -fx-fill: #B22222; } /* -ATK (Темный Красный) */
+            
+            .card-stat-def-pos { -fx-fill: #0078D7; } /* +DEF (Яркий Синий) */
+            .card-stat-def-neg { -fx-fill: #000080; } /* -DEF (Темный Синий) */
+
+            .card-stat-rp-pos  { -fx-fill: #FFA500; } /* +RP (Яркий Оранжевый) */
+            .card-stat-rp-neg  { -fx-fill: #8B4513; } /* -RP (Коричневый) */
             /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
             
             .card-stats {
@@ -780,13 +814,14 @@ public class Main extends Application {
               -fx-border-radius: 8;
               -fx-background-radius: 8;
               -fx-padding: 8;
+              -fx-alignment: center; /* Центрируем текст в новых стопках */
             }
             .drop-area-hover {
               -fx-border-color: #8aa2ff;
               -fx-background-color: linear-gradient(#f5f8ff, #ffffff);
             }
             """;
-    }    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+    }
 
     // --- НОВЫЕ/ОБНОВЛЕННЫЕ POJO (внутренние классы) ---
 
