@@ -58,8 +58,10 @@ public class Main extends Application {
     private final List<CardData> player2Hand = new ArrayList<>();
     private int currentTurnPointsUsed = 0;
 
-    private int creature1BetTotal = 0;
-    private int creature2BetTotal = 0;
+    private int p1_BetsOn_C1 = 0;
+    private int p2_BetsOn_C1 = 0;
+    private int p1_BetsOn_C2 = 0;
+    private int p2_BetsOn_C2 = 0;
 
     // UI references
     private HBox handBox;
@@ -230,16 +232,21 @@ public class Main extends Application {
     }
 
     private void updateBetDisplays() {
-        creature1BetText.setText("СТАВКИ: " + creature1BetTotal);
-        creature2BetText.setText("СТАВКИ: " + creature2BetTotal);
+        int totalOnC1 = p1_BetsOn_C1 + p2_BetsOn_C1;
+        int totalOnC2 = p1_BetsOn_C2 + p2_BetsOn_C2;
+        creature1BetText.setText("СТАВКИ: " + totalOnC1);
+        creature2BetText.setText("СТАВКИ: " + totalOnC2);
     }
 
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика боя с подсчетом выигрыша ---
     private void startBattle() {
         StringBuilder battleLog = new StringBuilder("БИТВА НАЧИНАЕТСЯ!\n\n");
 
         CreatureState attacker;
         CreatureState defender;
 
+        // 1. Определяем инициативу (кто ходит первым)
+        // ... (логика инициативы без изменений) ...
         if (creature1State.currentAttack > creature2State.currentAttack) {
             attacker = creature1State;
             defender = creature2State;
@@ -252,8 +259,7 @@ public class Main extends Application {
                     .append(") ходит первым (Атака выше).\n");
         } else {
             battleLog.append("Атака равна! Бросаем кубик...\n");
-            int roll = DiceUtils.rollD6(1); // Бросаем 1 кубик
-
+            int roll = DiceUtils.rollD6(1);
             if (roll % 2 == 0) {
                 attacker = creature1State;
                 defender = creature2State;
@@ -264,31 +270,54 @@ public class Main extends Application {
                 battleLog.append("Выпало ").append(roll).append(" (Нечетное). ").append(attacker.name).append(" ходит первым!\n");
             }
         }
+
+        // 2. Боевой цикл (без изменений)
         while (creature1State.currentHealth > 0 && creature2State.currentHealth > 0) {
             int diceCount = getDiceCount(attacker.currentAttack);
             int damage = DiceUtils.rollD6(diceCount);
-
             defender.currentHealth -= damage;
-
             battleLog.append(String.format("-> %s (Атака: %d) бросает %d d6 и наносит %d урона!\n",
                     attacker.name, attacker.currentAttack, diceCount, damage));
             battleLog.append(String.format("   %s: %d HP осталось.\n",
-                    defender.name, Math.max(0, defender.currentHealth))); // Не показываем HP < 0
-
+                    defender.name, Math.max(0, defender.currentHealth)));
             if (defender.currentHealth <= 0) {
-                break; // Бой окончен
+                break;
             }
-
             CreatureState temp = attacker;
             attacker = defender;
             defender = temp;
         }
 
-        String winnerName = (creature1State.currentHealth > 0) ? creature1State.name : creature2State.name;
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Определение победителя и выигрыша ---
+        String winnerName;
+        int player1Winnings;
+        int player2Winnings;
 
+        if (creature1State.currentHealth > 0) {
+            winnerName = creature1State.name;
+            player1Winnings = p1_BetsOn_C1; // P1 выигрывает то, что поставил на C1
+            player2Winnings = p2_BetsOn_C1; // P2 выигрывает то, что поставил на C1
+        } else {
+            winnerName = creature2State.name;
+            player1Winnings = p1_BetsOn_C2; // P1 выигрывает то, что поставил на C2
+            player2Winnings = p2_BetsOn_C2; // P2 выигрывает то, что поставил на C2
+        }
+
+        battleLog.append("\n").append(winnerName).append(" ПОБЕЖДАЕТ!");
+
+        // 4. Формируем сообщение о выигрыше
+        String winningsMessage = String.format(
+                "Игрок 1 выиграл: %d\nИгрок 2 выиграл: %d",
+                player1Winnings,
+                player2Winnings
+        );
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
+        // Показываем лог боя
         showInfo(battleLog.toString());
 
-        showEndGameSplashAndRestart(winnerName + " ПОБЕЖДАЕТ!");
+        // 5. Показываем сплэш-экран и перезапускаем
+        showEndGameSplashAndRestart(winnerName + " ПОБЕЖДАЕТ!", winningsMessage);
     }
 
     // --- НОВЫЙ МЕТОД: Определяет кол-во кубиков по атаке ---
@@ -302,18 +331,22 @@ public class Main extends Application {
         return 3; // 15+ атаки
     }
 
-    // --- ИЗМЕНЕНИЕ: Показывает победителя ---
-    private void showEndGameSplashAndRestart(String winnerMessage) {
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Показывает победителя и выигрыш ---
+    private void showEndGameSplashAndRestart(String winnerMessage, String winningsMessage) {
         Stage splashStage = new Stage();
         splashStage.initModality(Modality.APPLICATION_MODAL);
         splashStage.initOwner(creature1Pane.getScene().getWindow());
 
-        // --- ИЗМЕНЕНИЕ: Используем сообщение о победителе ---
+        // 1. Текст победителя
         Label label = new Label(winnerMessage);
         label.getStyleClass().add("card-title");
-        VBox splashRoot = new VBox(label);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
+        // 2. Текст выигрыша
+        Label labelWinnings = new Label(winningsMessage);
+        labelWinnings.getStyleClass().add("card-stats"); // Используем стиль статов
+
+        // 3. VBox для обоих текстов
+        VBox splashRoot = new VBox(10, label, labelWinnings); // VBox с отступом 10
         splashRoot.setAlignment(Pos.CENTER);
         splashRoot.setPadding(new Insets(50));
 
@@ -328,13 +361,15 @@ public class Main extends Application {
         });
         delay.play();
     }
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Сброс ставок при рестарте ---
+
     private void restartGame() {
         currentRound = 1;
 
         // --- НОВЫЙ КОД: Сброс ставок ---
-        creature1BetTotal = 0;
-        creature2BetTotal = 0;
+        p1_BetsOn_C1 = 0;
+        p2_BetsOn_C1 = 0;
+        p1_BetsOn_C2 = 0;
+        p2_BetsOn_C2 = 0;
         updateBetDisplays();
         // --- КОНЕЦ НОВОГО КОДА ---
 
@@ -431,16 +466,14 @@ public class Main extends Application {
             ev.consume();
         });
 
-        // --- ИЗМЕНЕНИЕ: Логика DragDropped (Бафф vs Ставка) ---
         dropArea.setOnDragDropped(ev -> {
             Dragboard db = ev.getDragboard();
             boolean success = false;
             if (db.hasString()) {
 
-                // 1. Парсим D&D контент
                 String content = db.getString();
                 String[] parts = content.split(";");
-                if (parts.length != 2) return; // Ошибка D&D
+                if (parts.length != 2) return;
 
                 String cardId = parts[0];
                 String mode = parts[1]; // "buff" или "bet"
@@ -453,40 +486,48 @@ public class Main extends Application {
                     updateTurnPointsText();
                     removeCardFromHandById(cardId);
 
-                    // --- ЛОГИКА "БАФФ" ---
                     if ("buff".equals(mode)) {
-                        // 1. Применяем эффекты к ЦЕЛЕВОМУ СУЩЕСТВУ
+                        // ... (Логика "БАФФ" без изменений) ...
                         if (cd.effects != null) {
                             for (Effect effect : cd.effects) {
                                 PatchUtils.applyEffect(targetState, effect);
                             }
                         }
-                        // 2. Обновляем UI ЦЕЛЕВОГО СУЩЕСТВА
                         refreshCreaturePane(targetPane, targetState);
-                        // 3. Добавляем карту (БАФФ) визуально В ЭТУ СТОПКУ
                         VBox small = createCardNode(cd, false, null);
                         small.setPrefSize(200, 36);
                         small.setMinSize(200, 36);
                         small.setMaxSize(200, 36);
                         dropArea.getChildren().add(small);
                     }
-                    // --- ЛОГИКА "СТАВКА" ---
+                    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика "СТАВКА" ---
                     else if ("bet".equals(mode)) {
-                        // 1. Применяем ставку к ЦЕЛЕВОМУ СУЩЕСТВУ
-                        if (targetBetId == 1) {
-                            creature1BetTotal += cd.betAmount;
-                        } else {
-                            creature2BetTotal += cd.betAmount;
+                        // 1. Применяем ставку к ЦЕЛЕВОМУ СУЩЕСТВУ от ТЕКУЩЕГО ИГРОКА
+                        if (targetBetId == 1) { // Ставка на C1
+                            if (currentPlayer == Player.PLAYER_1) {
+                                p1_BetsOn_C1 += cd.betAmount;
+                            } else {
+                                p2_BetsOn_C1 += cd.betAmount;
+                            }
+                        } else { // Ставка на C2
+                            if (currentPlayer == Player.PLAYER_1) {
+                                p1_BetsOn_C2 += cd.betAmount;
+                            } else {
+                                p2_BetsOn_C2 += cd.betAmount;
+                            }
                         }
-                        updateBetDisplays();
+                        updateBetDisplays(); // Обновляем общий банк
 
                         // 2. Добавляем карту (СТАВКА) визуально В ЭТУ СТОПКУ
                         Text betText = new Text("СТАВКА: +" + cd.betAmount);
-                        betText.getStyleClass().add("card-stat-bet"); // Новый стиль
+                        // Добавляем цвет в зависимости от игрока
+                        betText.getStyleClass().add(
+                                (currentPlayer == Player.PLAYER_1) ? "bet-text-p1" : "bet-text-p2"
+                        );
                         dropArea.getChildren().add(betText);
                     }
+                    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-                    // 4. Добавляем данные (для истории клика) В ЭТУ СТОПКУ
                     @SuppressWarnings("unchecked")
                     List<CardData> list = (List<CardData>) dropArea.getUserData();
                     list.add(cd);
@@ -836,7 +877,32 @@ public class Main extends Application {
               -fx-font-weight: bold;
               -fx-fill: #008800;
             }
-            /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
+            .bet-amount-text {
+              -fx-font-size: 32px;
+              -fx-font-weight: bold;
+              -fx-fill: #008800; /* Зеленый */
+            }
+                                                        .bet-total-text {
+                                                          -fx-font-size: 16px;
+                                                          -fx-font-weight: bold;
+                                                          -fx-fill: #333333;
+                                                        }
+                                                        .card-stat-bet {
+                                                          -fx-font-size: 12px;
+                                                          -fx-font-weight: bold;
+                                                          -fx-fill: #008800;
+                                                        }
+                                                        /* Стили для ставок в стопке */
+                                                        .bet-text-p1 {
+                                                          -fx-font-size: 12px;
+                                                          -fx-font-weight: bold;
+                                                          -fx-fill: #0078D7; /* Синий P1 */
+                                                        }
+                                                        .bet-text-p2 {
+                                                          -fx-font-size: 12px;
+                                                          -fx-font-weight: bold;
+                                                          -fx-fill: #E50000; /* Красный P2 */
+                                                        }
             
             .card-stat-hp-pos, .card-stat-hp-neg,
             .card-stat-atk-pos, .card-stat-atk-neg,
