@@ -2,28 +2,40 @@
   {"id":"i1","name":"Обновить экипировку","text":"+1 атака / +1 броня", "cost": 1,
     "effects": [
       {"op":"inc", "path":"/attack", "value": 1},
-      {"op":"inc", "path":"/defense", "value": 1}
+      {"op":"inc", "path":"/defense", "value": 1},
+      {"op":"inc", "path":"/ratePoints", "value": 1}
     ]},
   {"id":"i2","name":"Указать на слабость","text":"+2 к атаке", "cost": 1,
     "effects": [
-      {"op":"inc", "path":"/attack", "value": 2}
+      {"op":"inc", "path":"/attack", "value": 2},
+      {"op":"inc", "path":"/ratePoints", "value": 2}
     ]},
   {"id":"i3","name":"Нанять тренера","text":"+2 атака", "cost": 1,
     "effects": [
-      {"op":"inc", "path":"/attack", "value": 2}
+      {"op":"inc", "path":"/attack", "value": 2},
+      {"op":"inc", "path":"/ratePoints", "value": 1}
     ]},
   {"id":"i4","name":"Прикрепить шипы","text":"+1 атака, яд", "cost": 2,
     "effects": [
-      {"op":"inc", "path":"/attack", "value": 1}
+      {"op":"inc", "path":"/attack", "value": 1},
+      {"op":"inc", "path":"/ratePoints", "value": 0}
     ]},
   {"id":"i5","name":"Исцеляющий эликсир","text":"+10 к здоровью", "cost": 2,
     "effects": [
-      {"op":"inc", "path":"/health", "value": 10}
+      {"op":"inc", "path":"/health", "value": 10},
+      {"op":"inc", "path":"/ratePoints", "value": -1}
     ]},
   {"id":"i6","name":"Запутать мысли","text":"-5 инициативы", "cost": 3,
     "effects": [
-      {"op":"inc", "path":"/attack", "value": -1}
+      {"op":"inc", "path":"/attack", "value": -1},
+      {"op":"inc", "path":"/ratePoints", "value": -3}
     ]},
-  {"id":"i7","name":"Копернир","text":"Особая карта", "cost": 4, "effects": []},
-  {"id":"i8","name":"Копернир","text":"Особая карта (копия)", "cost": 4, "effects": []}
+  {"id":"i7","name":"Копернир","text":"Особая карта", "cost": 4,
+    "effects": [
+      {"op":"inc", "path":"/ratePoints", "value": 3}
+    ]},
+  {"id":"i8","name":"Копернир","text":"Особая карта (копия)", "cost": 4,
+    "effects": [
+      {"op":"inc", "path":"/ratePoints", "value": 3}
+    ]}
 ]

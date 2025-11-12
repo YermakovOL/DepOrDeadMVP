@@ -1,11 +1,9 @@
 package yermakov.oleksii;
 
-// Этот класс применяет наши кастомные эффекты ("inc")
 public class PatchUtils {
 
     public static void applyEffect(Main.CreatureState creature, Main.Effect effect) {
         if (!"inc".equals(effect.op)) {
-            // Мы пока поддерживаем только "inc"
             System.err.println("Неподдерживаемая операция: " + effect.op);
             return;
         }
@@ -19,6 +17,12 @@ public class PatchUtils {
                 break;
             case "/defense":
                 creature.currentDefense += effect.value;
+                break;
+            case "/ratePoints":
+                // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) RP не может быть < 1 ---
+                int newRp = creature.currentRatePoints + effect.value;
+                creature.currentRatePoints = Math.max(1, newRp);
+                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
                 break;
             default:
                 System.err.println("Неизвестный путь: " + effect.path);
