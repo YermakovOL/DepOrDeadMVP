@@ -64,6 +64,9 @@ public class Main extends Application {
     // --- НОВЫЕ ПОЛЯ: Ссылки на UI существ для обновления ---
     private VBox creature1Pane;
     private VBox creature2Pane;
+
+    private VBox centralDropZone1;
+    private VBox centralDropZone2;
     // --- КОНЕЦ НОВЫХ ПОЛЕЙ ---
 
 
@@ -88,23 +91,30 @@ public class Main extends Application {
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(16));
 
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) ---
+        // 1. Сначала создаем ПАНЕЛИ существ (они теперь "глупые")
         creature1Pane = createCreaturePane(creature1State);
         creature2Pane = createCreaturePane(creature2State);
 
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) HBox верхнего ряда ---
-        HBox centerCreatures = new HBox(15); // Уменьшаем отступ
+        // 2. Создаем "умные" ЦЕНТРАЛЬНЫЕ СТОПКИ, передавая им,
+        //    на какое существо (state) и какую панель (pane) они должны влиять.
+        centralDropZone1 = createCentralDropZone("Стопка 1 (Применить к левому)", creature1State, creature1Pane);
+        centralDropZone2 = createCentralDropZone("Стопка 2 (Применить к правому)", creature2State, creature2Pane);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
+
+        HBox centerCreatures = new HBox(15);
         centerCreatures.setAlignment(Pos.CENTER);
         centerCreatures.setPadding(new Insets(10));
 
-        // Добавляем 2 стопки между существами
+        // 3. Собираем всё вместе
         centerCreatures.getChildren().addAll(
                 creature1Pane,
-                createCentralDropZone("Стопка 1"),
-                createCentralDropZone("Стопка 2"),
+                centralDropZone1,
+                centralDropZone2,
                 creature2Pane
         );
         root.setTop(centerCreatures);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         VBox bottom = new VBox(10);
         bottom.setPadding(new Insets(8));
@@ -141,9 +151,7 @@ public class Main extends Application {
 
         updateHandDisplay();
 
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Увеличиваем ширину окна ---
         Scene scene = new Scene(root, 1200, 730);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
         scene.getStylesheets().add(makeCss());
         stage.setScene(scene);
         stage.setTitle("Dep or Dead — MVP (JavaFX)");
@@ -155,6 +163,8 @@ public class Main extends Application {
         currentTurnPointsUsed = 0;
         player1Hand.clear();
         player2Hand.clear();
+
+        Collections.shuffle(creatureTemplates);
 
         // --- НОВЫЙ КОД: Создаем "живых" существ из шаблонов ---
         if (creatureTemplates.size() < 2) {
@@ -182,7 +192,6 @@ public class Main extends Application {
 
             updateTurnPointsText();
             updateHandDisplay();
-            showInfo("Ход переходит к: Игрок 2");
         }
         // --- Логика для завершения хода Игрока 2 (Конец раунда) ---
         else {
@@ -199,7 +208,6 @@ public class Main extends Application {
 
                 updateTurnPointsText();
                 updateHandDisplay();
-                showInfo("Раунд " + currentRound + "! Ход переходит к: Игрок 1");
             }
         }
     }
@@ -330,7 +338,6 @@ public class Main extends Application {
         });
         delay.play();
     }
-
     // --- НОВЫЙ МЕТОД: Сброс игры в начальное состояние ---
     private void restartGame() {
         // 1. Сбрасываем счетчик
@@ -344,8 +351,10 @@ public class Main extends Application {
         creature2Pane.setUserData(creature2State);
 
         // 4. Очищаем контейнеры (drop-зоны)
-        clearDropZone(creature1Pane);
-        clearDropZone(creature2Pane);
+        // --- ИЗМЕНЕНИЕ: (ИСПРАВЛЕН БАГ) Очищаем ЦЕНТРАЛЬНЫЕ стопки ---
+        clearDropZone(centralDropZone1);
+        clearDropZone(centralDropZone2);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         // 5. Обновляем UI существ (сброс HP/RP и т.д.)
         refreshCreaturePane(creature1Pane, creature1State);
@@ -355,19 +364,14 @@ public class Main extends Application {
         updateHandDisplay();
         updateTurnPointsText();
     }
+    // --- ИЗМЕНЕНИЕ: (ИСПРАВЛЕН БАГ) ---
+    private void clearDropZone(VBox dropZone) {
+        dropZone.getChildren().clear(); // Очистить UI
 
-    // --- НОВЫЙ МЕТОД: Вспомогательный, для очистки drop-зон ---
-    private void clearDropZone(VBox creaturePane) {
-        // 0-й элемент - VBox карты, 1-й элемент - VBox dropArea
-        VBox dropArea = (VBox) creaturePane.getChildren().get(1);
-        dropArea.getChildren().clear(); // Очистить UI
-
-        // Очистить данные
-        if (dropArea.getUserData() instanceof List) {
-            ((List<?>) dropArea.getUserData()).clear();
+        if (dropZone.getUserData() instanceof List) {
+            ((List<?>) dropZone.getUserData()).clear();
         }
     }
-
     private void updateHandDisplay() {
         handBox.getChildren().clear();
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
@@ -402,41 +406,45 @@ public class Main extends Application {
         }
     }
 
-    // --- ИЗМЕНЕНИЕ: Принимает CreatureState ---
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Принимает CreatureState и целевую стопку ---
     private VBox createCreaturePane(CreatureState state) {
-        VBox container = new VBox(8);
-        container.setAlignment(Pos.TOP_CENTER);
-        container.setUserData(state);
 
-        // Передаем state для отображения статов
-        VBox card = createCardNode(state.baseCard, true, state);
-        card.setPrefSize(260, 180);
-        card.setMinSize(260, 180);
-        card.setMaxSize(260, 180);
+        VBox creatureCardPane = createCardNode(state.baseCard, true, state);
+        creatureCardPane.setPrefSize(260, 180);
+        creatureCardPane.setMinSize(260, 180);
+        creatureCardPane.setMaxSize(260, 180);
 
+        // Вся карта является контейнером
+        creatureCardPane.setUserData(state);
+
+        return creatureCardPane;
+    }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+// --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) "Умная" центральная стопка ---
+    private VBox createCentralDropZone(String title, CreatureState targetState, VBox targetPane) {
         VBox dropArea = new VBox(4);
-        dropArea.setPrefSize(260, 110);
-        dropArea.setMinSize(260, 110);
-        dropArea.setMaxSize(260, 110);
+        dropArea.setPrefSize(220, 180);
+        dropArea.setMinSize(220, 180);
+        dropArea.setMaxSize(220, 180);
         dropArea.setAlignment(Pos.TOP_CENTER);
         dropArea.getStyleClass().add("drop-area");
-        dropArea.setUserData(new ArrayList<CardData>()); // Тут храним примененные карты
+        dropArea.setUserData(new ArrayList<CardData>()); // Здесь хранятся карты
 
-        container.setOnDragOver(ev -> {
-            if (ev.getGestureSource() != container && ev.getDragboard().hasString()) {
+        // --- НОВЫЙ КОД: Переносим сюда всю логику Drag-n-Drop ---
+        dropArea.setOnDragOver(ev -> {
+            if (ev.getGestureSource() != dropArea && ev.getDragboard().hasString()) {
                 ev.acceptTransferModes(TransferMode.MOVE);
                 dropArea.getStyleClass().add("drop-area-hover");
             }
             ev.consume();
         });
 
-        container.setOnDragExited(ev -> {
+        dropArea.setOnDragExited(ev -> {
             dropArea.getStyleClass().remove("drop-area-hover");
             ev.consume();
         });
 
-        // --- ИЗМЕНЕНИЕ: Логика Drop (применение патча) ---
-        container.setOnDragDropped(ev -> {
+        dropArea.setOnDragDropped(ev -> {
             Dragboard db = ev.getDragboard();
             boolean success = false;
             if (db.hasString()) {
@@ -450,28 +458,24 @@ public class Main extends Application {
                         updateTurnPointsText();
                         removeCardFromHandById(cardId);
 
-                        // --- НОВЫЙ КОД: Применяем эффекты ---
-                        // 1. Получаем state существа, на которое бросили
-                        CreatureState targetState = (CreatureState) container.getUserData();
-
-                        // 2. Применяем каждый эффект
+                        // 1. Применяем эффекты к ЦЕЛЕВОМУ СУЩЕСТВУ
                         if (cd.effects != null) {
                             for (Effect effect : cd.effects) {
                                 PatchUtils.applyEffect(targetState, effect);
                             }
                         }
 
-                        // 3. Обновляем UI существа
-                        refreshCreaturePane(container, targetState);
-                        // --- КОНЕЦ НОВОГО КОДА ---
+                        // 2. Обновляем UI ЦЕЛЕВОГО СУЩЕСТВА
+                        refreshCreaturePane(targetPane, targetState);
 
-                        // Добавляем карту в dropArea (визуально)
+                        // 3. Добавляем карту визуально В ЭТУ СТОПКУ
                         VBox small = createCardNode(cd, false, null);
-                        small.setPrefSize(220, 36);
-                        small.setMinSize(220, 36);
-                        small.setMaxSize(220, 36);
+                        small.setPrefSize(200, 36); // Чуть уже для стопки
+                        small.setMinSize(200, 36);
+                        small.setMaxSize(200, 36);
                         dropArea.getChildren().add(small);
 
+                        // 4. Добавляем данные В ЭТУ СТОПКУ
                         @SuppressWarnings("unchecked")
                         List<CardData> list = (List<CardData>) dropArea.getUserData();
                         list.add(cd);
@@ -491,13 +495,12 @@ public class Main extends Application {
             ev.consume();
         });
 
-        // --- ИСПРАВЛЕНИЕ: (ЗАПРОС 3) Клик по контейнеру ---
-        // 1. Создаем общий обработчик
+        // --- НОВЫЙ КОД: Переносим сюда логику клика ---
         javafx.event.EventHandler<javafx.scene.input.MouseEvent> summaryClickHandler = ev -> {
             @SuppressWarnings("unchecked")
-            List<CardData> list = (List<CardData>) dropArea.getUserData(); // Данные всегда в dropArea
+            List<CardData> list = (List<CardData>) dropArea.getUserData(); // Читаем из этой стопки
             if (list.isEmpty()) {
-                showInfo("На существе нет карт влияния");
+                showInfo("В этой стопке нет карт");
             } else {
                 StringBuilder sb = new StringBuilder("Примененные карты:\n\n");
                 for (int i = 0; i < list.size(); i++) {
@@ -505,84 +508,66 @@ public class Main extends Application {
                     sb.append(i + 1).append(". ").append(cd.name)
                             .append(" (Стоимость: ").append(cd.cost).append(")");
 
-                    // --- НОВЫЙ КОД: Добавляем эффекты ---
                     List<String> effectStrings = new ArrayList<>();
-
-                    // Собираем все изменения статов
                     int hp = cd.getStatChange("/health");
                     if (hp != 0) effectStrings.add("HP: " + (hp > 0 ? "+" : "") + hp);
-
                     int atk = cd.getStatChange("/attack");
                     if (atk != 0) effectStrings.add("ATK: " + (atk > 0 ? "+" : "") + atk);
-
                     int def = cd.getStatChange("/defense");
                     if (def != 0) effectStrings.add("DEF: " + (def > 0 ? "+" : "") + def);
-
                     int rp = cd.getStatChange("/ratePoints");
                     if (rp != 0) effectStrings.add("RP: " + (rp > 0 ? "+" : "") + rp);
 
-                    // Если эффекты есть, выводим их
                     if (!effectStrings.isEmpty()) {
                         sb.append(" [").append(String.join(", ", effectStrings)).append("]");
                     }
-                    // --- КОНЕЦ НОВОГО КОДА ---
-
-                    sb.append("\n"); // Перенос строки
+                    sb.append("\n");
                 }
                 showInfo(sb.toString());
             }
         };
 
-        // 2. Применяем его и к карте, и к зоне под ней
+        // Клик работает и на стопке, и на связанной карте существа
         dropArea.setOnMouseClicked(summaryClickHandler);
-        card.setOnMouseClicked(summaryClickHandler);
-
-        container.getChildren().addAll(card, dropArea);
-        return container;
-    }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
-
-    // --- НОВЫЙ МЕТОD: (ЗАПРОС 1) Создает центральные стопки ---
-    private VBox createCentralDropZone(String title) {
-        VBox dropArea = new VBox(4);
-        // Делаем их по высоте как карта существа
-        dropArea.setPrefSize(220, 180);
-        dropArea.setMinSize(220, 180);
-        dropArea.setMaxSize(220, 180);
-        dropArea.setAlignment(Pos.CENTER);
-        dropArea.getStyleClass().add("drop-area");
-        dropArea.setUserData(new ArrayList<CardData>()); // Для будущего использования
-
-        Text label = new Text(title);
-        label.getStyleClass().add("card-text");
-        dropArea.getChildren().add(label);
-
-        // TODO: В будущем добавить сюда логику OnDragDropped
+        targetPane.setOnMouseClicked(summaryClickHandler);
+        // --- КОНЕЦ НОВОГО КОДА ---
 
         return dropArea;
     }
 
     // --- НОВЫЙ МЕТОД: Обновляет UI карточки существа ---
+    // --- ИСПРАВЛЕННЫЙ МЕТОД: Обновляет UI карточки существа ---
     private void refreshCreaturePane(VBox creaturePane, CreatureState state) {
-        VBox cardNode = (VBox) creaturePane.getChildren().get(0);
-        cardNode.getChildren().clear(); // Очищаем старые Text ноды
 
-        // Создаем заново UI, как в createCardNode
+        // --- ИСПРАВЛЕНИЕ: (Удалена строка с ошибкой ClassCastException) ---
+        // VBox cardNode = (VBox) creaturePane.getChildren().get(0); (ЭТО БЫЛО НЕПРАВИЛЬНО)
+
+        // Мы очищаем саму панель (которая и есть карточка),
+        // чтобы добавить в нее обновленный текст
+        creaturePane.getChildren().clear();
+        // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
+        // Создаем заново UI
         Text name = new Text(state.name);
         name.getStyleClass().add("card-title");
 
         String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
                 state.currentHealth, state.baseHealth,
                 state.currentAttack, state.currentDefense,
-                state.currentRatePoints); // <-- Добавлено
+                state.currentRatePoints);
         Text statsText = new Text(stats);
         statsText.getStyleClass().add("card-stats");
 
         Text desc = new Text(state.baseCard.text);
         desc.getStyleClass().add("card-text");
-        desc.wrappingWidthProperty().bind(cardNode.widthProperty().subtract(12));
 
-        cardNode.getChildren().addAll(name, statsText, desc);
+        // --- ИСПРАВЛЕНИЕ: Привязываем к ширине самой creaturePane ---
+        desc.wrappingWidthProperty().bind(creaturePane.widthProperty().subtract(12));
+        // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
+        // --- ИСПРАВЛЕНИЕ: Добавляем детей (Text) прямо в creaturePane (VBox) ---
+        creaturePane.getChildren().addAll(name, statsText, desc);
+        // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
     }
     // --- КОНЕЦ НОВОГО МЕТОДА ---
 
@@ -722,7 +707,7 @@ public class Main extends Application {
 
         // 3. Заполняем наши списки
         creatureTemplates.addAll(creatureList);
-        Collections.shuffle(creatureTemplates);
+
         influenceDeck.addAll(influenceList);
         Collections.shuffle(influenceDeck);
 
@@ -730,6 +715,7 @@ public class Main extends Application {
         for (CardData c : creatureList) allCards.put(c.id, c);
         for (CardData c : influenceList) allCards.put(c.id, c);
     }
+
 
     private InputStream getResourceStream(String filename) throws IOException {
         InputStream is = Main.class.getResourceAsStream("/" + filename);
@@ -757,6 +743,10 @@ public class Main extends Application {
               -fx-background-radius: 10;
               -fx-padding: 8;
               -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.06), 6, 0, 0, 2);
+            }
+            .creature-pane-hover {
+              -fx-border-color: #8aa2ff;
+              -fx-background-color: linear-gradient(#f5f8ff, #ffffff);
             }
             .card-title {
               -fx-font-weight: bold;
