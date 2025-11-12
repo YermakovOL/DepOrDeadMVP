@@ -58,6 +58,9 @@ public class Main extends Application {
     private final List<CardData> player2Hand = new ArrayList<>();
     private int currentTurnPointsUsed = 0;
 
+    private int creature1BetTotal = 0;
+    private int creature2BetTotal = 0;
+
     // UI references
     private HBox handBox;
     private Text turnPointsText;
@@ -67,7 +70,9 @@ public class Main extends Application {
 
     private VBox centralDropZone1;
     private VBox centralDropZone2;
-    // --- КОНЕЦ НОВЫХ ПОЛЕЙ ---
+
+    private Text creature1BetText;
+    private Text creature2BetText;
 
 
     public static void main(String[] args) {
@@ -91,30 +96,41 @@ public class Main extends Application {
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(16));
 
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) ---
-        // 1. Сначала создаем ПАНЕЛИ существ (они теперь "глупые")
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Новая компоновка ---
+
+        // 1. Панели существ (только карта)
         creature1Pane = createCreaturePane(creature1State);
         creature2Pane = createCreaturePane(creature2State);
 
-        // 2. Создаем "умные" ЦЕНТРАЛЬНЫЕ СТОПКИ, передавая им,
-        //    на какое существо (state) и какую панель (pane) они должны влиять.
-        centralDropZone1 = createCentralDropZone("Стопка 1 (Применить к левому)", creature1State, creature1Pane);
-        centralDropZone2 = createCentralDropZone("Стопка 2 (Применить к правому)", creature2State, creature2Pane);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+        // 2. Текст ставок
+        creature1BetText = new Text();
+        creature1BetText.getStyleClass().add("bet-total-text");
+        creature2BetText = new Text();
+        creature2BetText.getStyleClass().add("bet-total-text");
+        updateBetDisplays(); // Установить "Ставки: 0"
 
+        // 3. Колонки для Существ + Ставок
+        VBox creature1Column = new VBox(5, creature1Pane, creature1BetText);
+        creature1Column.setAlignment(Pos.CENTER);
+        VBox creature2Column = new VBox(5, creature2Pane, creature2BetText);
+        creature2Column.setAlignment(Pos.CENTER);
 
+        // 4. Центральные стопки (для баффов и ставок)
+        centralDropZone1 = createCentralDropZone(creature1State, creature1Pane, 1);
+        centralDropZone2 = createCentralDropZone(creature2State, creature2Pane, 2);
+
+        // 5. Собираем верхний ряд
         HBox centerCreatures = new HBox(15);
         centerCreatures.setAlignment(Pos.CENTER);
         centerCreatures.setPadding(new Insets(10));
-
-        // 3. Собираем всё вместе
         centerCreatures.getChildren().addAll(
-                creature1Pane,
+                creature1Column, // Колонка 1 (Существо + Ставки)
                 centralDropZone1,
                 centralDropZone2,
-                creature2Pane
+                creature2Column // Колонка 2 (Существо + Ставки)
         );
         root.setTop(centerCreatures);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         VBox bottom = new VBox(10);
         bottom.setPadding(new Insets(8));
@@ -133,18 +149,14 @@ public class Main extends Application {
 
         handBox = new HBox(8);
         handBox.setPadding(new Insets(8));
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) Центрируем руку ---
         handBox.setAlignment(Pos.CENTER);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         ScrollPane handScroll = new ScrollPane(handBox);
-        handScroll.setPrefHeight(170); // Высота из прошлого запроса
+        handScroll.setPrefHeight(170);
         handScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         handScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         handScroll.setFitToHeight(true);
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) Ограничиваем ширину, чтобы панель центрировалась ---
         handScroll.setMaxWidth(800);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         bottom.getChildren().addAll(buttonBar, turnPointsText, handScroll);
         root.setBottom(bottom);
@@ -166,15 +178,12 @@ public class Main extends Application {
 
         Collections.shuffle(creatureTemplates);
 
-        // --- НОВЫЙ КОД: Создаем "живых" существ из шаблонов ---
         if (creatureTemplates.size() < 2) {
             showError("Ошибка данных", "Недостаточно шаблонов существ!");
             return;
         }
         creature1State = new CreatureState(creatureTemplates.get(0));
         creature2State = new CreatureState(creatureTemplates.get(1));
-        // --- КОНЕЦ НОВОГО КОДА ---
-
 
         for (int i = 0; i < STARTING_HAND_SIZE; i++) {
             drawCardToHandData(Player.PLAYER_1);
@@ -183,29 +192,20 @@ public class Main extends Application {
     }
 
     private void endTurn() {
-        // --- Логика для завершения хода Игрока 1 ---
         if (currentPlayer == Player.PLAYER_1) {
             currentPlayer = Player.PLAYER_2;
             currentTurnPointsUsed = 0;
-
             drawCardsToMax(Player.PLAYER_2);
-
             updateTurnPointsText();
             updateHandDisplay();
-        }
-        // --- Логика для завершения хода Игрока 2 (Конец раунда) ---
-        else {
+        } else {
             if (currentRound >= MAX_ROUNDS) {
-                // --- ИГРА ОКОНЧЕНА -> НАЧАТЬ БИТВУ ---
                 startBattle();
             } else {
-                // --- СЛЕДУЮЩИЙ РАУНД ---
                 currentRound++;
                 currentPlayer = Player.PLAYER_1;
                 currentTurnPointsUsed = 0;
-
                 drawCardsToMax(Player.PLAYER_1);
-
                 updateTurnPointsText();
                 updateHandDisplay();
             }
@@ -225,19 +225,21 @@ public class Main extends Application {
 
     private void updateTurnPointsText() {
         String playerLabel = (currentPlayer == Player.PLAYER_1) ? "Игрок 1" : "Игрок 2";
-        // --- ИЗМЕНЕНИЕ: Добавлен счетчик раундов ---
         turnPointsText.setText(String.format("Раунд: %d / %d | Ход: %s | Очки: %d / %d",
                 currentRound, MAX_ROUNDS, playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
     }
 
-    // --- ИЗМЕНЕНИЕ: Логика боя с новой инициативой ---
+    private void updateBetDisplays() {
+        creature1BetText.setText("СТАВКИ: " + creature1BetTotal);
+        creature2BetText.setText("СТАВКИ: " + creature2BetTotal);
+    }
+
     private void startBattle() {
         StringBuilder battleLog = new StringBuilder("БИТВА НАЧИНАЕТСЯ!\n\n");
 
         CreatureState attacker;
         CreatureState defender;
 
-        // 1. Определяем инициативу (кто ходит первым) - ТОЛЬКО ПО АТАКЕ
         if (creature1State.currentAttack > creature2State.currentAttack) {
             attacker = creature1State;
             defender = creature2State;
@@ -249,27 +251,20 @@ public class Main extends Application {
             battleLog.append(attacker.name).append(" (Атака: ").append(attacker.currentAttack)
                     .append(") ходит первым (Атака выше).\n");
         } else {
-            // Атаки равны. Бросаем кубик.
             battleLog.append("Атака равна! Бросаем кубик...\n");
             int roll = DiceUtils.rollD6(1); // Бросаем 1 кубик
 
             if (roll % 2 == 0) {
-                // Четное
                 attacker = creature1State;
                 defender = creature2State;
                 battleLog.append("Выпало ").append(roll).append(" (Четное). ").append(attacker.name).append(" ходит первым!\n");
             } else {
-                // Нечетное
                 attacker = creature2State;
                 defender = creature1State;
                 battleLog.append("Выпало ").append(roll).append(" (Нечетное). ").append(attacker.name).append(" ходит первым!\n");
             }
         }
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ИНИЦИАТИВЫ ---
-
-        // 2. Боевой цикл (остается без изменений)
         while (creature1State.currentHealth > 0 && creature2State.currentHealth > 0) {
-            // Атакующий наносит урон
             int diceCount = getDiceCount(attacker.currentAttack);
             int damage = DiceUtils.rollD6(diceCount);
 
@@ -280,24 +275,19 @@ public class Main extends Application {
             battleLog.append(String.format("   %s: %d HP осталось.\n",
                     defender.name, Math.max(0, defender.currentHealth))); // Не показываем HP < 0
 
-            // Проверка, выжил ли защитник
             if (defender.currentHealth <= 0) {
                 break; // Бой окончен
             }
 
-            // Смена ролей: защитник становится атакующим
             CreatureState temp = attacker;
             attacker = defender;
             defender = temp;
         }
 
-        // 3. Определение победителя (остается без изменений)
         String winnerName = (creature1State.currentHealth > 0) ? creature1State.name : creature2State.name;
 
-        // Показываем лог боя
         showInfo(battleLog.toString());
 
-        // 4. Показываем сплэш-экран и перезапускаем (остается без изменений)
         showEndGameSplashAndRestart(winnerName + " ПОБЕЖДАЕТ!");
     }
 
@@ -338,29 +328,27 @@ public class Main extends Application {
         });
         delay.play();
     }
-    // --- НОВЫЙ МЕТОД: Сброс игры в начальное состояние ---
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Сброс ставок при рестарте ---
     private void restartGame() {
-        // 1. Сбрасываем счетчик
         currentRound = 1;
 
-        // 2. Сбрасываем все данные (руки, очки, создает НОВЫЕ state существ)
+        // --- НОВЫЙ КОД: Сброс ставок ---
+        creature1BetTotal = 0;
+        creature2BetTotal = 0;
+        updateBetDisplays();
+        // --- КОНЕЦ НОВОГО КОДА ---
+
         startGame();
 
-        // 3. Обновляем ССЫЛКИ на новые state в старом UI
         creature1Pane.setUserData(creature1State);
         creature2Pane.setUserData(creature2State);
 
-        // 4. Очищаем контейнеры (drop-зоны)
-        // --- ИЗМЕНЕНИЕ: (ИСПРАВЛЕН БАГ) Очищаем ЦЕНТРАЛЬНЫЕ стопки ---
         clearDropZone(centralDropZone1);
         clearDropZone(centralDropZone2);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-        // 5. Обновляем UI существ (сброс HP/RP и т.д.)
         refreshCreaturePane(creature1Pane, creature1State);
         refreshCreaturePane(creature2Pane, creature2State);
 
-        // 6. Обновляем руки и текст
         updateHandDisplay();
         updateTurnPointsText();
     }
@@ -372,22 +360,23 @@ public class Main extends Application {
             ((List<?>) dropZone.getUserData()).clear();
         }
     }
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика клика/состояния переехала в createHandCardNode ---
     private void updateHandDisplay() {
         handBox.getChildren().clear();
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
 
         for (CardData card : currentHand) {
-            // Передаем null в state, так как это карта влияния
-            VBox cardNode = createCardNode(card, false, null);
-            cardNode.getStyleClass().add("hand-card");
+            // --- ИЗМЕНЕНИЕ: Используем новый метод для карт в руке ---
+            VBox cardNode = createHandCardNode(card);
+            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-            // --- ИЗМЕНЕНИЕ: Карты в руке стали выше и уже ---
+            cardNode.getStyleClass().add("hand-card");
             cardNode.setPrefSize(150, 140);
             cardNode.setMinSize(150, 140);
             cardNode.setMaxSize(150, 140);
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-            cardNode.setOnMouseClicked(ev -> showInfo(card.name + " [" + card.cost + "]\n\n" + card.text));
+            // Клик для просмотра (если это не переключатель)
+            // cardNode.setOnMouseClicked(ev -> showInfo(card.name + " [" + card.cost + "]\n\n" + card.text));
             handBox.getChildren().add(cardNode);
         }
     }
@@ -419,9 +408,8 @@ public class Main extends Application {
 
         return creatureCardPane;
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
-// --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) "Умная" центральная стопка ---
-    private VBox createCentralDropZone(String title, CreatureState targetState, VBox targetPane) {
+
+    private VBox createCentralDropZone(CreatureState targetState, VBox targetPane, int targetBetId) {
         VBox dropArea = new VBox(4);
         dropArea.setPrefSize(220, 180);
         dropArea.setMinSize(220, 180);
@@ -430,7 +418,6 @@ public class Main extends Application {
         dropArea.getStyleClass().add("drop-area");
         dropArea.setUserData(new ArrayList<CardData>()); // Здесь хранятся карты
 
-        // --- НОВЫЙ КОД: Переносим сюда всю логику Drag-n-Drop ---
         dropArea.setOnDragOver(ev -> {
             if (ev.getGestureSource() != dropArea && ev.getDragboard().hasString()) {
                 ev.acceptTransferModes(TransferMode.MOVE);
@@ -444,65 +431,87 @@ public class Main extends Application {
             ev.consume();
         });
 
+        // --- ИЗМЕНЕНИЕ: Логика DragDropped (Бафф vs Ставка) ---
         dropArea.setOnDragDropped(ev -> {
             Dragboard db = ev.getDragboard();
             boolean success = false;
             if (db.hasString()) {
-                String cardId = db.getString();
-                CardData cd = allCards.get(cardId); // Карта влияния
 
-                if (cd != null && !"creature".equals(cd.type)) {
-                    if (currentTurnPointsUsed + cd.cost <= MAX_TURN_POINTS) {
+                // 1. Парсим D&D контент
+                String content = db.getString();
+                String[] parts = content.split(";");
+                if (parts.length != 2) return; // Ошибка D&D
 
-                        currentTurnPointsUsed += cd.cost;
-                        updateTurnPointsText();
-                        removeCardFromHandById(cardId);
+                String cardId = parts[0];
+                String mode = parts[1]; // "buff" или "bet"
 
+                CardData cd = allCards.get(cardId);
+                if (cd == null) return;
+
+                if (currentTurnPointsUsed + cd.cost <= MAX_TURN_POINTS) {
+                    currentTurnPointsUsed += cd.cost;
+                    updateTurnPointsText();
+                    removeCardFromHandById(cardId);
+
+                    // --- ЛОГИКА "БАФФ" ---
+                    if ("buff".equals(mode)) {
                         // 1. Применяем эффекты к ЦЕЛЕВОМУ СУЩЕСТВУ
                         if (cd.effects != null) {
                             for (Effect effect : cd.effects) {
                                 PatchUtils.applyEffect(targetState, effect);
                             }
                         }
-
                         // 2. Обновляем UI ЦЕЛЕВОГО СУЩЕСТВА
                         refreshCreaturePane(targetPane, targetState);
-
-                        // 3. Добавляем карту визуально В ЭТУ СТОПКУ
+                        // 3. Добавляем карту (БАФФ) визуально В ЭТУ СТОПКУ
                         VBox small = createCardNode(cd, false, null);
-                        small.setPrefSize(200, 36); // Чуть уже для стопки
+                        small.setPrefSize(200, 36);
                         small.setMinSize(200, 36);
                         small.setMaxSize(200, 36);
                         dropArea.getChildren().add(small);
-
-                        // 4. Добавляем данные В ЭТУ СТОПКУ
-                        @SuppressWarnings("unchecked")
-                        List<CardData> list = (List<CardData>) dropArea.getUserData();
-                        list.add(cd);
-
-                        success = true;
-                        updateHandDisplay();
-                    } else {
-                        showInfo(String.format(
-                                "Недостаточно очков!\n\nСтоимость карты: %d\nУ вас есть: %d",
-                                cd.cost,
-                                (MAX_TURN_POINTS - currentTurnPointsUsed)
-                        ));
                     }
+                    // --- ЛОГИКА "СТАВКА" ---
+                    else if ("bet".equals(mode)) {
+                        // 1. Применяем ставку к ЦЕЛЕВОМУ СУЩЕСТВУ
+                        if (targetBetId == 1) {
+                            creature1BetTotal += cd.betAmount;
+                        } else {
+                            creature2BetTotal += cd.betAmount;
+                        }
+                        updateBetDisplays();
+
+                        // 2. Добавляем карту (СТАВКА) визуально В ЭТУ СТОПКУ
+                        Text betText = new Text("СТАВКА: +" + cd.betAmount);
+                        betText.getStyleClass().add("card-stat-bet"); // Новый стиль
+                        dropArea.getChildren().add(betText);
+                    }
+
+                    // 4. Добавляем данные (для истории клика) В ЭТУ СТОПКУ
+                    @SuppressWarnings("unchecked")
+                    List<CardData> list = (List<CardData>) dropArea.getUserData();
+                    list.add(cd);
+
+                    success = true;
+                    updateHandDisplay();
+                } else {
+                    showInfo(String.format(
+                            "Недостаточно очков!\n\nСтоимость карты: %d\nУ вас есть: %d",
+                            cd.cost,
+                            (MAX_TURN_POINTS - currentTurnPointsUsed)
+                    ));
                 }
             }
             ev.setDropCompleted(success);
             ev.consume();
         });
 
-        // --- НОВЫЙ КОД: Переносим сюда логику клика ---
         javafx.event.EventHandler<javafx.scene.input.MouseEvent> summaryClickHandler = ev -> {
             @SuppressWarnings("unchecked")
             List<CardData> list = (List<CardData>) dropArea.getUserData(); // Читаем из этой стопки
             if (list.isEmpty()) {
                 showInfo("В этой стопке нет карт");
             } else {
-                StringBuilder sb = new StringBuilder("Примененные карты:\n\n");
+                StringBuilder sb = new StringBuilder("Примененные карты и ставки:\n\n");
                 for (int i = 0; i < list.size(); i++) {
                     CardData cd = list.get(i);
                     sb.append(i + 1).append(". ").append(cd.name)
@@ -518,6 +527,12 @@ public class Main extends Application {
                     int rp = cd.getStatChange("/ratePoints");
                     if (rp != 0) effectStrings.add("RP: " + (rp > 0 ? "+" : "") + rp);
 
+                    // --- НОВЫЙ КОД: Показ ставки в истории ---
+                    if (cd.betAmount > 0) {
+                        effectStrings.add("СТАВКА: +" + cd.betAmount);
+                    }
+                    // --- КОНЕЦ НОВОГО КОДА ---
+
                     if (!effectStrings.isEmpty()) {
                         sb.append(" [").append(String.join(", ", effectStrings)).append("]");
                     }
@@ -527,14 +542,11 @@ public class Main extends Application {
             }
         };
 
-        // Клик работает и на стопке, и на связанной карте существа
         dropArea.setOnMouseClicked(summaryClickHandler);
         targetPane.setOnMouseClicked(summaryClickHandler);
-        // --- КОНЕЦ НОВОГО КОДА ---
 
         return dropArea;
     }
-
     // --- НОВЫЙ МЕТОД: Обновляет UI карточки существа ---
     // --- ИСПРАВЛЕННЫЙ МЕТОД: Обновляет UI карточки существа ---
     private void refreshCreaturePane(VBox creaturePane, CreatureState state) {
@@ -571,21 +583,107 @@ public class Main extends Application {
     }
     // --- КОНЕЦ НОВОГО МЕТОДА ---
 
-    // --- ИЗМЕНЕНИЕ: Отображает статы (RP) ---
-    private VBox createCardNode(CardData data, boolean large, CreatureState state) {
-        VBox box = new VBox();
+    // --- НОВЫЙ МЕТОД: (ЗАПРОС 1) Для создания карт в руке (с 2 состояниями) ---
+    private VBox createHandCardNode(CardData data) {
+        VBox box = new VBox(4); // 4px spacing
         box.getStyleClass().add("card");
         box.setPadding(new Insets(6));
-        box.setSpacing(4);
+
+        // --- 1. Элементы, видимые всегда ---
+        Text name = new Text(data.name);
+        name.getStyleClass().add("card-title");
+
+        // --- 2. Элементы "Режима БАФФ" (по умолчанию) ---
+        VBox buffView = new VBox(4);
+        buffView.setPadding(new Insets(2, 0, 0, 0));
+
+        // Стоимость
+        if (data.cost > 0) {
+            Text costText = new Text("Стоимость: " + data.cost);
+            costText.getStyleClass().add("card-cost");
+            buffView.getChildren().add(costText);
+        }
+
+        // Статы (HP, ATK, DEF, RP)
+        HBox statsBox = new HBox(8);
+        addStatChangeText(statsBox, "HP", data.getStatChange("/health"), "hp");
+        addStatChangeText(statsBox, "ATK", data.getStatChange("/attack"), "atk");
+        addStatChangeText(statsBox, "DEF", data.getStatChange("/defense"), "def");
+        addStatChangeText(statsBox, "RP", data.getStatChange("/ratePoints"), "rp");
+
+        if (!statsBox.getChildren().isEmpty()) {
+            buffView.getChildren().add(statsBox);
+        }
+
+        // Описание
+        Text desc = new Text(data.text);
+        desc.getStyleClass().add("card-text");
+        desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
+        buffView.getChildren().add(desc);
+
+        // --- 3. Элементы "Режима СТАВКА" (скрыты) ---
+        VBox betView = new VBox(4);
+        betView.setAlignment(Pos.CENTER);
+
+        Text betLabel = new Text("СТАВКА");
+        betLabel.getStyleClass().add("card-cost");
+
+        Text betAmountText = new Text("+" + data.betAmount);
+        betAmountText.getStyleClass().add("bet-amount-text"); // Новый стиль
+
+        betView.getChildren().addAll(betLabel, betAmountText);
+
+        // Скрываем режим "Ставка"
+        betView.setVisible(false);
+        betView.setManaged(false);
+
+        // --- 4. Сборка ---
+        box.getChildren().addAll(name, buffView, betView);
+
+        // --- 5. Логика переключения (Клик) ---
+        box.getProperties().put("isBet", false); // Начальное состояние
+        box.setOnMouseClicked(ev -> {
+            boolean isBet = (boolean) box.getProperties().get("isBet");
+            // Инвертируем состояние
+            box.getProperties().put("isBet", !isBet);
+
+            // Переключаем видимость
+            buffView.setVisible(isBet);
+            buffView.setManaged(isBet);
+            betView.setVisible(!isBet);
+            betView.setManaged(!isBet);
+        });
+
+        // --- 6. Логика D&D (Drag Detected) ---
+        box.setOnDragDetected(ev -> {
+            boolean isBet = (boolean) box.getProperties().get("isBet");
+            String mode = isBet ? "bet" : "buff";
+
+            Dragboard db = box.startDragAndDrop(TransferMode.MOVE);
+            ClipboardContent content = new ClipboardContent();
+
+            // --- ИЗМЕНЕНИЕ: Передаем ID и Режим ---
+            content.putString(data.id + ";" + mode);
+            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
+            db.setContent(content);
+            ev.consume();
+        });
+
+        return box;
+    }
+
+    private VBox createCardNode(CardData data, boolean large, CreatureState state) {
+        VBox box = new VBox(4);
+        box.getStyleClass().add("card");
+        box.setPadding(new Insets(6));
 
         Text name = new Text(data.name);
         name.getStyleClass().add("card-title");
 
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) Короткое описание ---
         Text desc = new Text(data.text);
         desc.getStyleClass().add("card-text");
         desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         if (large && state != null) {
             // --- ЭТО КАРТА СУЩЕСТВА ---
@@ -595,54 +693,17 @@ public class Main extends Application {
                     state.currentRatePoints);
             Text statsText = new Text(stats);
             statsText.getStyleClass().add("card-stats");
-
             box.getChildren().addAll(name, statsText, desc);
-            // (Клик-хэндлер теперь устанавливается в createCreaturePane)
 
         } else {
-            // --- ЭТО КАРТА ВЛИЯНИЯ ---
-
-            // 1. Стоимость
-            if (data.cost > 0) {
-                Text costText = new Text("Стоимость: " + data.cost);
-                costText.getStyleClass().add("card-cost");
-                box.getChildren().add(name); // Имя
-                box.getChildren().add(costText); // Стоимость
-            } else {
-                box.getChildren().add(name); // Только имя
-            }
-
-            // --- НОВЫЙ КОД: (ЗАПРОС 3) Отображение всех статов ---
-            // Мы создаем HBox для статов, чтобы они были в одну строку
-            HBox statsBox = new HBox(8); // 8px spacing
-
-            // Проверяем каждый стат
-            addStatChangeText(statsBox, "HP", data.getStatChange("/health"), "hp");
-            addStatChangeText(statsBox, "ATK", data.getStatChange("/attack"), "atk");
-            addStatChangeText(statsBox, "DEF", data.getStatChange("/defense"), "def");
-            addStatChangeText(statsBox, "RP", data.getStatChange("/ratePoints"), "rp");
-
-            if (!statsBox.getChildren().isEmpty()) {
-                box.getChildren().add(statsBox); // Добавляем HBox со статами
-            }
-            // --- КОНЕЦ НОВОГО КОДА ---
-
-            box.getChildren().add(desc); // Описание
-
-            if (!large) { // Перетаскивание
-                box.setOnDragDetected(ev -> {
-                    Dragboard db = box.startDragAndDrop(TransferMode.MOVE);
-                    ClipboardContent content = new ClipboardContent();
-                    content.putString(data.id);
-                    db.setContent(content);
-                    ev.consume();
-                });
-            }
+            // --- ЭТО КАРТА ВЛИЯНИЯ (в стопке сброса) ---
+            // (Больше не отображаем статы в стопке, только имя, для простоты)
+            box.getChildren().addAll(name);
         }
 
         box.setUserData(data);
         return box;
-    }    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+    }
 
     // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Создает Text для 8 цветов ---
     private void addStatChangeText(HBox container, String prefix, int value, String styleType) {
@@ -759,8 +820,24 @@ public class Main extends Application {
               -fx-padding: 2 0 0 0;
             }
             
-            /* --- НОВЫЕ СТИЛИ (ЗАПРОС 3) --- */
-            /* Общий стиль для всех 8 классов */
+            /* --- НОВЫЕ СТИЛИ (ЗАПРОС 1) --- */
+            .bet-amount-text {
+              -fx-font-size: 32px;
+              -fx-font-weight: bold;
+              -fx-fill: #008800; /* Зеленый */
+            }
+            .bet-total-text {
+              -fx-font-size: 16px;
+              -fx-font-weight: bold;
+              -fx-fill: #333333;
+            }
+            .card-stat-bet {
+              -fx-font-size: 12px;
+              -fx-font-weight: bold;
+              -fx-fill: #008800;
+            }
+            /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
+            
             .card-stat-hp-pos, .card-stat-hp-neg,
             .card-stat-atk-pos, .card-stat-atk-neg,
             .card-stat-def-pos, .card-stat-def-neg,
@@ -768,20 +845,14 @@ public class Main extends Application {
               -fx-font-size: 11px;
               -fx-font-weight: bold;
             }
-
-            /* 8-цветная реализация */
-            .card-stat-hp-pos  { -fx-fill: #00A800; } /* +HP (Яркий Зеленый) */
-            .card-stat-hp-neg  { -fx-fill: #597D35; } /* -HP (Темный Оливковый) */
-            
-            .card-stat-atk-pos { -fx-fill: #E50000; } /* +ATK (Яркий Красный) */
-            .card-stat-atk-neg { -fx-fill: #B22222; } /* -ATK (Темный Красный) */
-            
-            .card-stat-def-pos { -fx-fill: #0078D7; } /* +DEF (Яркий Синий) */
-            .card-stat-def-neg { -fx-fill: #000080; } /* -DEF (Темный Синий) */
-
-            .card-stat-rp-pos  { -fx-fill: #FFA500; } /* +RP (Яркий Оранжевый) */
-            .card-stat-rp-neg  { -fx-fill: #8B4513; } /* -RP (Коричневый) */
-            /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
+            .card-stat-hp-pos  { -fx-fill: #00A800; }
+            .card-stat-hp-neg  { -fx-fill: #597D35; }
+            .card-stat-atk-pos { -fx-fill: #E50000; }
+            .card-stat-atk-neg { -fx-fill: #B22222; }
+            .card-stat-def-pos { -fx-fill: #0078D7; }
+            .card-stat-def-neg { -fx-fill: #000080; }
+            .card-stat-rp-pos  { -fx-fill: #FFA500; }
+            .card-stat-rp-neg  { -fx-fill: #8B4513; }
             
             .card-stats {
               -fx-font-size: 13px;
@@ -792,7 +863,7 @@ public class Main extends Application {
             .card-text {
               -fx-font-size: 12px;
               -fx-fill: #333333;
-              -fx-font-style: italic; /* Сделаем описание курсивом */
+              -fx-font-style: italic;
             }
             .hand-card {
               -fx-cursor: hand;
@@ -804,7 +875,7 @@ public class Main extends Application {
               -fx-border-radius: 8;
               -fx-background-radius: 8;
               -fx-padding: 8;
-              -fx-alignment: center; /* Центрируем текст в новых стопках */
+              -fx-alignment: top-center; /* Изменено */
             }
             .drop-area-hover {
               -fx-border-color: #8aa2ff;
@@ -823,6 +894,7 @@ public class Main extends Application {
         public String text; // (ЗАПРОС 2) Теперь это короткое описание
         public String type;
         public int cost;
+        public int betAmount;
 
         // Статы (для существ)
         public int health;
