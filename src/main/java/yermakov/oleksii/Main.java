@@ -35,8 +35,11 @@ public class Main extends Application {
     private static final int STARTING_HAND_SIZE = 5;
     private static final int MAX_HAND_SIZE = 5;
     private static final int MAX_TURN_POINTS = 4;
-    private static final int MAX_ROUNDS = 7;
+    private static final int MAX_ROUNDS = 4;
     private int currentRound = 1;
+
+    private static final int ATTACK_TIER_1_MAX = 6;
+    private static final int ATTACK_TIER_2_MAX = 14;
 
     // --- ИЗМЕНЕНИЕ: Карта теперь по ID, так как парсер Jackson
     private final Map<String, CardData> allCards = new HashMap<>();
@@ -117,7 +120,9 @@ public class Main extends Application {
         handBox.setAlignment(Pos.CENTER_LEFT);
 
         ScrollPane handScroll = new ScrollPane(handBox);
-        handScroll.setPrefHeight(140);
+        // --- ИЗМЕНЕНИЕ: Увеличена высота панели руки ---
+        handScroll.setPrefHeight(170);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
         handScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         handScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         handScroll.setFitToHeight(true);
@@ -127,7 +132,9 @@ public class Main extends Application {
 
         updateHandDisplay();
 
-        Scene scene = new Scene(root, 900, 700); // Увеличил высоту для статов
+        // --- ИЗМЕНЕНИЕ: Увеличил общую высоту окна ---
+        Scene scene = new Scene(root, 900, 730);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
         scene.getStylesheets().add(makeCss());
         stage.setScene(scene);
         stage.setTitle("Dep or Dead — MVP (JavaFX)");
@@ -171,8 +178,8 @@ public class Main extends Application {
         // --- Логика для завершения хода Игрока 2 (Конец раунда) ---
         else {
             if (currentRound >= MAX_ROUNDS) {
-                // --- ИГРА ОКОНЧЕНА ---
-                showEndGameSplashAndRestart();
+                // --- ИГРА ОКОНЧЕНА -> НАЧАТЬ БИТВУ ---
+                startBattle();
             } else {
                 // --- СЛЕДУЮЩИЙ РАУНД ---
                 currentRound++;
@@ -206,15 +213,100 @@ public class Main extends Application {
                 currentRound, MAX_ROUNDS, playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
     }
 
-    private void showEndGameSplashAndRestart() {
+    // --- ИЗМЕНЕНИЕ: Логика боя с новой инициативой ---
+    private void startBattle() {
+        StringBuilder battleLog = new StringBuilder("БИТВА НАЧИНАЕТСЯ!\n\n");
+
+        CreatureState attacker;
+        CreatureState defender;
+
+        // 1. Определяем инициативу (кто ходит первым) - ТОЛЬКО ПО АТАКЕ
+        if (creature1State.currentAttack > creature2State.currentAttack) {
+            attacker = creature1State;
+            defender = creature2State;
+            battleLog.append(attacker.name).append(" (Атака: ").append(attacker.currentAttack)
+                    .append(") ходит первым (Атака выше).\n");
+        } else if (creature2State.currentAttack > creature1State.currentAttack) {
+            attacker = creature2State;
+            defender = creature1State;
+            battleLog.append(attacker.name).append(" (Атака: ").append(attacker.currentAttack)
+                    .append(") ходит первым (Атака выше).\n");
+        } else {
+            // Атаки равны. Бросаем кубик.
+            battleLog.append("Атака равна! Бросаем кубик...\n");
+            int roll = DiceUtils.rollD6(1); // Бросаем 1 кубик
+
+            if (roll % 2 == 0) {
+                // Четное
+                attacker = creature1State;
+                defender = creature2State;
+                battleLog.append("Выпало ").append(roll).append(" (Четное). ").append(attacker.name).append(" ходит первым!\n");
+            } else {
+                // Нечетное
+                attacker = creature2State;
+                defender = creature1State;
+                battleLog.append("Выпало ").append(roll).append(" (Нечетное). ").append(attacker.name).append(" ходит первым!\n");
+            }
+        }
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ИНИЦИАТИВЫ ---
+
+        // 2. Боевой цикл (остается без изменений)
+        while (creature1State.currentHealth > 0 && creature2State.currentHealth > 0) {
+            // Атакующий наносит урон
+            int diceCount = getDiceCount(attacker.currentAttack);
+            int damage = DiceUtils.rollD6(diceCount);
+
+            defender.currentHealth -= damage;
+
+            battleLog.append(String.format("-> %s (Атака: %d) бросает %d d6 и наносит %d урона!\n",
+                    attacker.name, attacker.currentAttack, diceCount, damage));
+            battleLog.append(String.format("   %s: %d HP осталось.\n",
+                    defender.name, Math.max(0, defender.currentHealth))); // Не показываем HP < 0
+
+            // Проверка, выжил ли защитник
+            if (defender.currentHealth <= 0) {
+                break; // Бой окончен
+            }
+
+            // Смена ролей: защитник становится атакующим
+            CreatureState temp = attacker;
+            attacker = defender;
+            defender = temp;
+        }
+
+        // 3. Определение победителя (остается без изменений)
+        String winnerName = (creature1State.currentHealth > 0) ? creature1State.name : creature2State.name;
+
+        // Показываем лог боя
+        showInfo(battleLog.toString());
+
+        // 4. Показываем сплэш-экран и перезапускаем (остается без изменений)
+        showEndGameSplashAndRestart(winnerName + " ПОБЕЖДАЕТ!");
+    }
+
+    // --- НОВЫЙ МЕТОД: Определяет кол-во кубиков по атаке ---
+    private int getDiceCount(int attack) {
+        if (attack <= ATTACK_TIER_1_MAX) {
+            return 1; // 1-6 атаки
+        }
+        if (attack <= ATTACK_TIER_2_MAX) {
+            return 2; // 7-14 атаки
+        }
+        return 3; // 15+ атаки
+    }
+
+    // --- ИЗМЕНЕНИЕ: Показывает победителя ---
+    private void showEndGameSplashAndRestart(String winnerMessage) {
         Stage splashStage = new Stage();
         splashStage.initModality(Modality.APPLICATION_MODAL);
-        // Получаем "родительское" окно, чтобы сплэш появился над ним
         splashStage.initOwner(creature1Pane.getScene().getWindow());
 
-        Label label = new Label("БОЙ ОКОНЧЕН");
-        label.getStyleClass().add("card-title"); // Используем стиль
+        // --- ИЗМЕНЕНИЕ: Используем сообщение о победителе ---
+        Label label = new Label(winnerMessage);
+        label.getStyleClass().add("card-title");
         VBox splashRoot = new VBox(label);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
         splashRoot.setAlignment(Pos.CENTER);
         splashRoot.setPadding(new Insets(50));
 
@@ -222,11 +314,10 @@ public class Main extends Application {
         splashStage.setTitle("Конец игры");
         splashStage.show();
 
-        // Задержка в 2 секунды
         PauseTransition delay = new PauseTransition(Duration.seconds(2));
         delay.setOnFinished(e -> {
             splashStage.close();
-            restartGame(); // Перезапускаем игру ПОСЛЕ закрытия
+            restartGame();
         });
         delay.play();
     }
@@ -277,9 +368,11 @@ public class Main extends Application {
             VBox cardNode = createCardNode(card, false, null);
             cardNode.getStyleClass().add("hand-card");
 
-            cardNode.setPrefSize(220, 60);
-            cardNode.setMinSize(220, 60);
-            cardNode.setMaxSize(220, 60);
+            // --- ИЗМЕНЕНИЕ: Карты в руке стали выше и уже ---
+            cardNode.setPrefSize(150, 140);
+            cardNode.setMinSize(150, 140);
+            cardNode.setMaxSize(150, 140);
+            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
             cardNode.setOnMouseClicked(ev -> showInfo(card.name + " [" + card.cost + "]\n\n" + card.text));
             handBox.getChildren().add(cardNode);
@@ -389,6 +482,8 @@ public class Main extends Application {
             ev.consume();
         });
 
+        // --- ИСПРАВЛЕНИЕ: (ЗАПРОС 3) Клик по контейнеру ---
+        // 1. Создаем общий обработчик
         javafx.event.EventHandler<javafx.scene.input.MouseEvent> summaryClickHandler = ev -> {
             @SuppressWarnings("unchecked")
             List<CardData> list = (List<CardData>) dropArea.getUserData(); // Данные всегда в dropArea
@@ -399,7 +494,31 @@ public class Main extends Application {
                 for (int i = 0; i < list.size(); i++) {
                     CardData cd = list.get(i);
                     sb.append(i + 1).append(". ").append(cd.name)
-                            .append(" (Стоимость: ").append(cd.cost).append(")\n");
+                            .append(" (Стоимость: ").append(cd.cost).append(")");
+
+                    // --- НОВЫЙ КОД: Добавляем эффекты ---
+                    List<String> effectStrings = new ArrayList<>();
+
+                    // Собираем все изменения статов
+                    int hp = cd.getStatChange("/health");
+                    if (hp != 0) effectStrings.add("HP: " + (hp > 0 ? "+" : "") + hp);
+
+                    int atk = cd.getStatChange("/attack");
+                    if (atk != 0) effectStrings.add("ATK: " + (atk > 0 ? "+" : "") + atk);
+
+                    int def = cd.getStatChange("/defense");
+                    if (def != 0) effectStrings.add("DEF: " + (def > 0 ? "+" : "") + def);
+
+                    int rp = cd.getStatChange("/ratePoints");
+                    if (rp != 0) effectStrings.add("RP: " + (rp > 0 ? "+" : "") + rp);
+
+                    // Если эффекты есть, выводим их
+                    if (!effectStrings.isEmpty()) {
+                        sb.append(" [").append(String.join(", ", effectStrings)).append("]");
+                    }
+                    // --- КОНЕЦ НОВОГО КОДА ---
+
+                    sb.append("\n"); // Перенос строки
                 }
                 showInfo(sb.toString());
             }
@@ -438,7 +557,7 @@ public class Main extends Application {
     }
     // --- КОНЕЦ НОВОГО МЕТОДА ---
 
-    // --- ИЗМЕНЕНИЕ: Отображает статы, если это карта существа ---
+    // --- ИЗМЕНЕНИЕ: Отображает статы (RP) ---
     private VBox createCardNode(CardData data, boolean large, CreatureState state) {
         VBox box = new VBox();
         box.getStyleClass().add("card");
@@ -448,48 +567,53 @@ public class Main extends Application {
         Text name = new Text(data.name);
         name.getStyleClass().add("card-title");
 
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) Короткое описание ---
         Text desc = new Text(data.text);
         desc.getStyleClass().add("card-text");
-
         desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         if (large && state != null) {
             // --- ЭТО КАРТА СУЩЕСТВА ---
-            // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) Добавлено RP в статы ---
             String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
                     state.currentHealth, state.baseHealth,
                     state.currentAttack, state.currentDefense,
-                    state.currentRatePoints); // <-- Добавлено
+                    state.currentRatePoints);
             Text statsText = new Text(stats);
             statsText.getStyleClass().add("card-stats");
 
             box.getChildren().addAll(name, statsText, desc);
-            // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Удален старый обработчик клика ---
-            // box.setOnMouseClicked(ev -> showInfo(data.name + "\n\n" + stats + "\n" + data.text));
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+            // (Клик-хэндлер теперь устанавливается в createCreaturePane)
 
         } else {
-            Text costText = null;
+            // --- ЭТО КАРТА ВЛИЯНИЯ ---
+
+            // 1. Стоимость
             if (data.cost > 0) {
-                costText = new Text("Стоимость: " + data.cost);
+                Text costText = new Text("Стоимость: " + data.cost);
                 costText.getStyleClass().add("card-cost");
+                box.getChildren().add(name); // Имя
+                box.getChildren().add(costText); // Стоимость
+            } else {
+                box.getChildren().add(name); // Только имя
             }
 
-            // --- НОВЫЙ КОД: (ЗАПРОС 1) Отображение RP карты ---
-            Text rpText = null;
-            int rpChange = data.getRatePointsChange(); // Считаем RP
-            if (rpChange != 0) {
-                rpText = new Text("RP: " + (rpChange > 0 ? "+" : "") + rpChange);
-                // Добавляем класс стиля
-                rpText.getStyleClass().add(rpChange > 0 ? "card-rp-pos" : "card-rp-neg");
-            }
+            // --- НОВЫЙ КОД: (ЗАПРОС 3) Отображение всех статов ---
+            // Мы создаем HBox для статов, чтобы они были в одну строку
+            HBox statsBox = new HBox(8); // 8px spacing
 
-            // Добавляем в UI (пропуская null)
-            box.getChildren().add(name);
-            if (costText != null) box.getChildren().add(costText);
-            if (rpText != null) box.getChildren().add(rpText);
-            box.getChildren().add(desc);
+            // Проверяем каждый стат
+            addStatChangeText(statsBox, "HP", data.getStatChange("/health"), "hp");
+            addStatChangeText(statsBox, "ATK", data.getStatChange("/attack"), "atk");
+            addStatChangeText(statsBox, "DEF", data.getStatChange("/defense"), "def");
+            addStatChangeText(statsBox, "RP", data.getStatChange("/ratePoints"), "rp");
+
+            if (!statsBox.getChildren().isEmpty()) {
+                box.getChildren().add(statsBox); // Добавляем HBox со статами
+            }
             // --- КОНЕЦ НОВОГО КОДА ---
+
+            box.getChildren().add(desc); // Описание
 
             if (!large) { // Перетаскивание
                 box.setOnDragDetected(ev -> {
@@ -504,8 +628,29 @@ public class Main extends Application {
 
         box.setUserData(data);
         return box;
+    }    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
+    // --- НОВЫЙ МЕТОД: (ЗАПРОС 3) Создает Text для статов ---
+    private void addStatChangeText(HBox container, String prefix, int value, String styleType) {
+        if (value == 0) {
+            return; // Не показываем, если нет изменений
+        }
+
+        String text = prefix + ": " + (value > 0 ? "+" : "") + value;
+        Text statText = new Text(text);
+
+        // Выбираем стиль
+        if (value > 0) {
+            statText.getStyleClass().add("card-stat-pos");
+        } else {
+            statText.getStyleClass().add("card-stat-neg");
+        }
+
+        // Добавляем специфичный стиль (hp, atk, def, rp) для разных цветов
+        statText.getStyleClass().add("card-stat-" + styleType);
+
+        container.getChildren().add(statText);
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void removeCardFromHandById(String cardId) {
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
@@ -550,7 +695,9 @@ public class Main extends Application {
 
         // 3. Заполняем наши списки
         creatureTemplates.addAll(creatureList);
+        Collections.shuffle(creatureTemplates);
         influenceDeck.addAll(influenceList);
+        Collections.shuffle(influenceDeck);
 
         // 4. Заполняем allCards для быстрого доступа
         for (CardData c : creatureList) allCards.put(c.id, c);
@@ -572,7 +719,7 @@ public class Main extends Application {
     // parseArrayIntoList()
     // parseObject()
 
-    // --- ИЗМЕНЕНИЕ: CSS для статов ---
+    // --- ИЗМЕНЕНИЕ: CSS для статов и RP ---
     private String makeCss() {
         return """
             data:,
@@ -594,18 +741,24 @@ public class Main extends Application {
               -fx-font-weight: bold;
               -fx-padding: 2 0 0 0;
             }
-            /* --- НОВЫЕ СТИЛИ (ЗАПРОС 1) --- */
-            .card-rp-pos {
+            
+            /* --- НОВЫЕ СТИЛИ (ЗАПРОС 3) --- */
+            .card-stat-pos {
               -fx-font-size: 11px;
-              -fx-fill: #008800; /* Зеленый */
               -fx-font-weight: bold;
             }
-            .card-rp-neg {
+            .card-stat-neg {
               -fx-font-size: 11px;
-              -fx-fill: #cc0000; /* Красный */
               -fx-font-weight: bold;
             }
+            
+            /* Разные цвета для статов */
+            .card-stat-hp { -fx-fill: #008800; } /* Зеленый */
+            .card-stat-atk { -fx-fill: #cc0000; } /* Красный */
+            .card-stat-def { -fx-fill: #0066cc; } /* Синий */
+            .card-stat-rp { -fx-fill: #e69500; } /* Оранжевый */
             /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
+            
             .card-stats {
               -fx-font-size: 13px;
               -fx-fill: #333333;
@@ -615,6 +768,7 @@ public class Main extends Application {
             .card-text {
               -fx-font-size: 12px;
               -fx-fill: #333333;
+              -fx-font-style: italic; /* Сделаем описание курсивом */
             }
             .hand-card {
               -fx-cursor: hand;
@@ -632,8 +786,7 @@ public class Main extends Application {
               -fx-background-color: linear-gradient(#f5f8ff, #ffffff);
             }
             """;
-    }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+    }    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     // --- НОВЫЕ/ОБНОВЛЕННЫЕ POJO (внутренние классы) ---
 
@@ -642,7 +795,7 @@ public class Main extends Application {
     public static class CardData {
         public String id;
         public String name;
-        public String text;
+        public String text; // (ЗАПРОС 2) Теперь это короткое описание
         public String type;
         public int cost;
 
@@ -650,7 +803,7 @@ public class Main extends Application {
         public int health;
         public int attack;
         public int defense;
-        public int ratePoints; // <-- НОВОЕ ПОЛЕ: Начальный RatePoints для существ
+        public int ratePoints;
 
         // Эффекты (для карт влияния)
         public List<Effect> effects;
@@ -660,19 +813,20 @@ public class Main extends Application {
             this.effects = new ArrayList<>();
         }
 
-        // --- НОВЫЙ КОД: (ЗАПРОС 1) Вспомогательный метод для UI ---
-        public int getRatePointsChange() {
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Умный метод для получения всех статов ---
+        public int getStatChange(String path) {
             if (effects == null) {
                 return 0;
             }
-            int totalRp = 0;
+            int total = 0;
             for (Effect e : effects) {
-                if ("/ratePoints".equals(e.path)) {
-                    totalRp += e.value;
+                if (path.equals(e.path)) {
+                    total += e.value;
                 }
             }
-            return totalRp;
+            return total;
         }
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
     }
 
     // POJO для эффекта
