@@ -1,8 +1,8 @@
 [
-  {"id":"c1","name":"Крестьянин","text":"Простой юнит", "health": 10, "attack": 1, "defense": 0, "ratePoints": 1},
-  {"id":"c2","name":"Троглодит","text":"Иммунитет к слепоте", "health": 15, "attack": 2, "defense": 1, "ratePoints": 2},
-  {"id":"c3","name":"Гарпия","text":"Летает", "health": 8, "attack": 3, "defense": 0, "ratePoints": 3},
-  {"id":"c4","name":"Дварф-страж","text":"Оглушающий удар", "health": 20, "attack": 1, "defense": 2, "ratePoints": 1},
-  {"id":"c5","name":"Вампир","text":"Вампиризм", "health": 12, "attack": 3, "defense": 1, "ratePoints": 2},
-  {"id":"c6","name":"Мантикора","text":"Яд, страх", "health": 25, "attack": 4, "defense": 2, "ratePoints": 3}
+  {"id":"c1","name":{"ru":"Крестьянин","en":"Peasant"},"text":{"ru":"Простой юнит","en":"A simple unit"}, "health": 10, "attack": 1, "defense": 0, "ratePoints": 1},
+  {"id":"c2","name":{"ru":"Троглодит","en":"Troglodyte"},"text":{"ru":"Иммунитет к слепоте","en":"Immune to blindness"}, "health": 15, "attack": 2, "defense": 1, "ratePoints": 2},
+  {"id":"c3","name":{"ru":"Гарпия","en":"Harpy"},"text":{"ru":"Летает","en":"Flying unit"}, "health": 8, "attack": 3, "defense": 0, "ratePoints": 3},
+  {"id":"c4","name":{"ru":"Дварф-страж","en":"Dwarf Guard"},"text":{"ru":"Оглушающий удар","en":"Stunning blow"}, "health": 20, "attack": 1, "defense": 2, "ratePoints": 1},
+  {"id":"c5","name":{"ru":"Вампир","en":"Vampire"},"text":{"ru":"Вампиризм","en":"Vampirism"}, "health": 12, "attack": 3, "defense": 1, "ratePoints": 2},
+  {"id":"c6","name":{"ru":"Мантикора","en":"Manticore"},"text":{"ru":"Яд, страх","en":"Poison, fear"}, "health": 25, "attack": 4, "defense": 2, "ratePoints": 3}
 ]

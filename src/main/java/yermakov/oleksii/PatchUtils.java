@@ -4,7 +4,7 @@ public class PatchUtils {
 
     public static void applyEffect(Main.CreatureState creature, Main.Effect effect) {
         if (!"inc".equals(effect.op)) {
-            System.err.println("Неподдерживаемая операция: " + effect.op);
+            System.err.println(String.format(I18n.getString("error.unsupportedOp"), effect.op));
             return;
         }
 
@@ -19,13 +19,10 @@ public class PatchUtils {
                 creature.currentDefense += effect.value;
                 break;
             case "/ratePoints":
-                // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) RP не может быть < 1 ---
-                int newRp = creature.currentRatePoints + effect.value;
-                creature.currentRatePoints = Math.max(1, newRp);
-                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+                creature.currentRatePoints += effect.value;
                 break;
             default:
-                System.err.println("Неизвестный путь: " + effect.path);
+                System.err.println(String.format(I18n.getString("error.unknownPath"), effect.path));
         }
     }
 }

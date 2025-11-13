@@ -16,7 +16,7 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
-import javafx.scene.shape.Rectangle; // <-- ДОБАВЬТЕ ЭТОТ ИМПОРТ
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -29,7 +29,6 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class Main extends Application {
 
-    // --- КОНСТАНТЫ ИГРЫ ---
     private static final String CREATURES_FILE = "creatures.json";
     private static final String INFLUENCE_FILE = "influenceCards.json";
     private static final int STARTING_HAND_SIZE = 5;
@@ -38,23 +37,19 @@ public class Main extends Application {
     private static final int MAX_ROUNDS = 4;
     private int currentRound = 1;
 
-    // --- КОНСТАНТЫ БОЯ (ЗАПРОС 1) ---
     private static final int ATTACK_TIER_1_MAX = 6;
     private static final int ATTACK_TIER_2_MAX = 14;
 
-    // --- КОНСТАНТЫ НАГРАД (ЗАПРОС 2) ---
     private static final int BET_REWARD_GREEN_THRESHOLD = 4;
     private static final int BET_REWARD_RED_THRESHOLD = 8;
     private static final double REWARD_YELLOW_MULT = 1.0;
     private static final double REWARD_GREEN_MULT = 2.0;
     private static final double REWARD_RED_MULT = 3.0;
 
-    // --- СПИСКИ КАРТ ---
     private final Map<String, CardData> allCards = new HashMap<>();
     private final List<CardData> creatureTemplates = new ArrayList<>();
     private final List<CardData> influenceDeck = new ArrayList<>();
 
-    // --- СОСТОЯНИЕ (STATE) ---
     private CreatureState creature1State;
     private CreatureState creature2State;
     private enum Player { PLAYER_1, PLAYER_2 }
@@ -67,7 +62,6 @@ public class Main extends Application {
     private int p1_BetsOn_C2 = 0;
     private int p2_BetsOn_C2 = 0;
 
-    // --- UI REFERENCES ---
     private HBox handBox;
     private Text turnPointsText;
     private VBox creature1Pane;
@@ -77,7 +71,6 @@ public class Main extends Application {
     private Text creature1BetText;
     private Text creature2BetText;
 
-    // --- UI ШКАЛЫ (ЗАПРОС 1 и 2) ---
     private HBox attackScale1;
     private HBox attackScale2;
     private VBox betRewardScaleUI;
@@ -86,16 +79,19 @@ public class Main extends Application {
 
 
     public static void main(String[] args) {
-        launch();
+        launch(args);
     }
 
     @Override
     public void start(Stage stage) {
+        List<String> args = getParameters().getRaw();
+        I18n.setLocale(args.isEmpty() ? "ru" : args.get(0));
+
         try {
             loadDataWithJackson();
         } catch (Exception e) {
             e.printStackTrace();
-            showError("Критическая ошибка", "Не удалось загрузить данные из ресурсов: " + e.getMessage());
+            showError(I18n.getString("error.critical"), String.format(I18n.getString("error.dataLoad"), e.getMessage()));
             return;
         }
 
@@ -113,7 +109,6 @@ public class Main extends Application {
         creature2BetText.getStyleClass().add("bet-total-text");
         updateBetDisplays();
 
-        // --- НОВЫЙ UI: (ЗАПРОС 1) Шкалы атаки ---
         attackScale1 = createAttackScale();
         attackScale2 = createAttackScale();
 
@@ -121,7 +116,6 @@ public class Main extends Application {
         creature1Column.setAlignment(Pos.CENTER);
         VBox creature2Column = new VBox(5, creature2Pane, creature2BetText, attackScale2);
         creature2Column.setAlignment(Pos.CENTER);
-        // --- КОНЕЦ НОВОГО UI ---
 
         centralDropZone1 = createCentralDropZone(creature1State, creature1Pane, 1);
         centralDropZone2 = createCentralDropZone(creature2State, creature2Pane, 2);
@@ -141,22 +135,19 @@ public class Main extends Application {
         bottom.setPadding(new Insets(8));
         bottom.setAlignment(Pos.CENTER);
 
-        Button endTurnBtn = new Button("Завершить ход");
+        Button endTurnBtn = new Button(I18n.getString("button.endTurn"));
         endTurnBtn.setMinWidth(180);
         endTurnBtn.setOnAction(e -> endTurn());
 
         HBox buttonBar = new HBox(10, endTurnBtn);
         buttonBar.setAlignment(Pos.CENTER);
 
-        // --- НОВЫЙ UI: (ЗАПРОС 2) Шкала наград ---
         betRewardScaleUI = createBetRewardScale();
-        // --- КОНЕЦ НОВОГО UI ---
 
         turnPointsText = new Text();
         turnPointsText.getStyleClass().add("card-title");
         updateTurnPointsText();
-
-        updateAllScales(); // Первоначальная отрисовка шкал
+        updateAllScales();
 
         handBox = new HBox(8);
         handBox.setPadding(new Insets(8));
@@ -174,10 +165,10 @@ public class Main extends Application {
 
         updateHandDisplay();
 
-        Scene scene = new Scene(root, 1200, 800); // Немного увеличил высоту
+        Scene scene = new Scene(root, 1200, 800);
         scene.getStylesheets().add(makeCss());
         stage.setScene(scene);
-        stage.setTitle("Dep or Dead — MVP (JavaFX)");
+        stage.setTitle(I18n.getString("app.title"));
         stage.show();
     }
 
@@ -190,7 +181,7 @@ public class Main extends Application {
         Collections.shuffle(creatureTemplates);
 
         if (creatureTemplates.size() < 2) {
-            showError("Ошибка данных", "Недостаточно шаблонов существ!");
+            showError(I18n.getString("error.critical"), I18n.getString("error.noCreatures"));
             return;
         }
         creature1State = new CreatureState(creatureTemplates.get(0));
@@ -207,21 +198,20 @@ public class Main extends Application {
             currentPlayer = Player.PLAYER_2;
             currentTurnPointsUsed = 0;
             drawCardsToMax(Player.PLAYER_2);
-            updateTurnPointsText();
-            updateHandDisplay();
         } else {
             if (currentRound >= MAX_ROUNDS) {
                 startBattle();
+                return; // Выход, чтобы не обновлять UI до перезапуска
             } else {
                 currentRound++;
                 currentPlayer = Player.PLAYER_1;
                 currentTurnPointsUsed = 0;
                 drawCardsToMax(Player.PLAYER_1);
-                updateTurnPointsText();
-                updateHandDisplay();
             }
         }
-        updateAllScales(); // Обновляем шкалы при каждой смене хода
+        updateTurnPointsText();
+        updateHandDisplay();
+        updateAllScales();
     }
 
     private void drawCardsToMax(Player player) {
@@ -236,44 +226,43 @@ public class Main extends Application {
     }
 
     private void updateTurnPointsText() {
-        String playerLabel = (currentPlayer == Player.PLAYER_1) ? "Игрок 1" : "Игрок 2";
-        turnPointsText.setText(String.format("Раунд: %d / %d | Ход: %s | Очки: %d / %d",
+        String playerLabel = (currentPlayer == Player.PLAYER_1) ? I18n.getString("label.player1") : I18n.getString("label.player2");
+        turnPointsText.setText(String.format(I18n.getString("label.turnInfo"),
                 currentRound, MAX_ROUNDS, playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
     }
 
     private void updateBetDisplays() {
         int totalOnC1 = p1_BetsOn_C1 + p2_BetsOn_C1;
         int totalOnC2 = p1_BetsOn_C2 + p2_BetsOn_C2;
-        creature1BetText.setText("СТАВКИ: " + totalOnC1);
-        creature2BetText.setText("СТАВКИ: " + totalOnC2);
+        creature1BetText.setText(String.format(I18n.getString("label.bets"), totalOnC1));
+        creature2BetText.setText(String.format(I18n.getString("label.bets"), totalOnC2));
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Логика боя с множителями наград ---
     private void startBattle() {
-        StringBuilder battleLog = new StringBuilder("БИТВА НАЧИНАЕТСЯ!\n\n");
-        CreatureState attacker, defender;
+        StringBuilder battleLog = new StringBuilder(I18n.getString("battle.start"));
+
+        CreatureState attacker;
+        CreatureState defender;
 
         if (creature1State.currentAttack > creature2State.currentAttack) {
             attacker = creature1State;
             defender = creature2State;
-            battleLog.append(attacker.name).append(" (Атака: ").append(attacker.currentAttack)
-                    .append(") ходит первым (Атака выше).\n");
+            battleLog.append(String.format(I18n.getString("battle.initiative.attack"), attacker.getLocalizedName(), attacker.currentAttack));
         } else if (creature2State.currentAttack > creature1State.currentAttack) {
             attacker = creature2State;
             defender = creature1State;
-            battleLog.append(attacker.name).append(" (Атака: ").append(attacker.currentAttack)
-                    .append(") ходит первым (Атака выше).\n");
+            battleLog.append(String.format(I18n.getString("battle.initiative.attack"), attacker.getLocalizedName(), attacker.currentAttack));
         } else {
-            battleLog.append("Атака равна! Бросаем кубик...\n");
+            battleLog.append(I18n.getString("battle.initiative.tie"));
             int roll = DiceUtils.rollD6(1);
             if (roll % 2 == 0) {
                 attacker = creature1State;
                 defender = creature2State;
-                battleLog.append("Выпало ").append(roll).append(" (Четное). ").append(attacker.name).append(" ходит первым!\n");
+                battleLog.append(String.format(I18n.getString("battle.initiative.tie.even"), roll, attacker.getLocalizedName()));
             } else {
                 attacker = creature2State;
                 defender = creature1State;
-                battleLog.append("Выпало ").append(roll).append(" (Нечетное). ").append(attacker.name).append(" ходит первым!\n");
+                battleLog.append(String.format(I18n.getString("battle.initiative.tie.odd"), roll, attacker.getLocalizedName()));
             }
         }
 
@@ -281,10 +270,10 @@ public class Main extends Application {
             int diceCount = getDiceCount(attacker.currentAttack);
             int damage = DiceUtils.rollD6(diceCount);
             defender.currentHealth -= damage;
-            battleLog.append(String.format("-> %s (Атака: %d) бросает %d d6 и наносит %d урона!\n",
-                    attacker.name, attacker.currentAttack, diceCount, damage));
-            battleLog.append(String.format("   %s: %d HP осталось.\n",
-                    defender.name, Math.max(0, defender.currentHealth)));
+            battleLog.append(String.format(I18n.getString("battle.attack"),
+                    attacker.getLocalizedName(), attacker.currentAttack, diceCount, damage));
+            battleLog.append(String.format(I18n.getString("battle.hpRemaining"),
+                    defender.getLocalizedName(), Math.max(0, defender.currentHealth)));
             if (defender.currentHealth <= 0) {
                 break;
             }
@@ -298,52 +287,43 @@ public class Main extends Application {
         int player2Winnings;
 
         if (creature1State.currentHealth > 0) {
-            winnerName = creature1State.name;
-            // P1 поставил на C1 (победителя)
+            winnerName = creature1State.getLocalizedName();
             player1Winnings = (int)(p1_BetsOn_C1 * getRewardMultiplier(creature1State, creature2State));
-            // P2 поставил на C1 (победителя)
             player2Winnings = (int)(p2_BetsOn_C1 * getRewardMultiplier(creature1State, creature2State));
         } else {
-            winnerName = creature2State.name;
-            // P1 поставил на C2 (победителя)
+            winnerName = creature2State.getLocalizedName();
             player1Winnings = (int)(p1_BetsOn_C2 * getRewardMultiplier(creature2State, creature1State));
-            // P2 поставил на C2 (победителя)
             player2Winnings = (int)(p2_BetsOn_C2 * getRewardMultiplier(creature2State, creature1State));
         }
 
-        battleLog.append("\n").append(winnerName).append(" ПОБЕЖДАЕТ!");
+        battleLog.append("\n").append(String.format(I18n.getString("battle.winner"), winnerName));
 
         String winningsMessage = String.format(
-                "Игрок 1 выиграл: %d\nИгрок 2 выиграл: %d",
+                I18n.getString("game.winnings"),
                 player1Winnings,
                 player2Winnings
         );
 
         showInfo(battleLog.toString());
-        showEndGameSplashAndRestart(winnerName + " ПОБЕЖДАЕТ!", winningsMessage);
+        showEndGameSplashAndRestart(String.format(I18n.getString("battle.winner"), winnerName), winningsMessage);
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-    // --- НОВЫЙ МЕТОД: (ЗАПРОС 3) Расчет множителя награды ---
     private double getRewardMultiplier(CreatureState betOn, CreatureState opponent) {
         int rpDiff = betOn.currentRatePoints - opponent.currentRatePoints;
 
         if (rpDiff > 0) {
-            // Ставка на фаворита
             return REWARD_YELLOW_MULT;
         } else {
-            // Ставка на аутсайдера (rpDiff <= 0)
             int diff = Math.abs(rpDiff);
             if (diff < BET_REWARD_GREEN_THRESHOLD) {
-                return REWARD_YELLOW_MULT; // Небольшая разница, все еще "желтая"
+                return REWARD_YELLOW_MULT;
             }
             if (diff < BET_REWARD_RED_THRESHOLD) {
-                return REWARD_GREEN_MULT; // Средняя разница
+                return REWARD_GREEN_MULT;
             }
-            return REWARD_RED_MULT; // Большая разница
+            return REWARD_RED_MULT;
         }
     }
-    // --- КОНЕЦ НОВОГО МЕТОДА ---
 
     private int getDiceCount(int attack) {
         if (attack <= ATTACK_TIER_1_MAX) {
@@ -370,7 +350,7 @@ public class Main extends Application {
         splashRoot.setPadding(new Insets(50));
 
         splashStage.setScene(new Scene(splashRoot));
-        splashStage.setTitle("Конец игры");
+        splashStage.setTitle(I18n.getString("game.endTitle"));
         splashStage.show();
 
         PauseTransition delay = new PauseTransition(Duration.seconds(2));
@@ -402,7 +382,7 @@ public class Main extends Application {
 
         updateHandDisplay();
         updateTurnPointsText();
-        updateAllScales(); // Обновляем шкалы при рестарте
+        updateAllScales();
     }
 
     private void clearDropZone(VBox dropZone) {
@@ -519,7 +499,7 @@ public class Main extends Application {
                         }
                         updateBetDisplays();
 
-                        Text betText = new Text("СТАВКА: +" + cd.betAmount);
+                        Text betText = new Text(String.format(I18n.getString("label.betText"), cd.betAmount));
                         betText.getStyleClass().add(
                                 (currentPlayer == Player.PLAYER_1) ? "bet-text-p1" : "bet-text-p2"
                         );
@@ -532,10 +512,9 @@ public class Main extends Application {
 
                     success = true;
                     updateHandDisplay();
-                    updateAllScales(); // Обновляем шкалы после применения эффекта
+                    updateAllScales();
                 } else {
-                    showInfo(String.format(
-                            "Недостаточно очков!\n\nСтоимость карты: %d\nУ вас есть: %d",
+                    showInfo(String.format(I18n.getString("error.notEnoughPoints"),
                             cd.cost,
                             (MAX_TURN_POINTS - currentTurnPointsUsed)
                     ));
@@ -549,25 +528,25 @@ public class Main extends Application {
             @SuppressWarnings("unchecked")
             List<CardData> list = (List<CardData>) dropArea.getUserData();
             if (list.isEmpty()) {
-                showInfo("В этой стопке нет карт");
+                showInfo(I18n.getString("error.noCardsInStack"));
             } else {
-                StringBuilder sb = new StringBuilder("Примененные карты и ставки:\n\n");
+                StringBuilder sb = new StringBuilder(I18n.getString("info.stackContents"));
                 for (int i = 0; i < list.size(); i++) {
                     CardData cd = list.get(i);
-                    sb.append(i + 1).append(". ").append(cd.name)
-                            .append(" (Стоимость: ").append(cd.cost).append(")");
+                    sb.append(i + 1).append(". ").append(cd.getLocalizedName())
+                            .append(" (").append(I18n.getString("label.cost").replace(":", "")).append(": ").append(cd.cost).append(")");
 
                     List<String> effectStrings = new ArrayList<>();
                     int hp = cd.getStatChange("/health");
-                    if (hp != 0) effectStrings.add("HP: " + (hp > 0 ? "+" : "") + hp);
+                    if (hp != 0) effectStrings.add(String.format(I18n.getString("info.effect.hp"), (hp > 0 ? "+" : ""), hp));
                     int atk = cd.getStatChange("/attack");
-                    if (atk != 0) effectStrings.add("ATK: " + (atk > 0 ? "+" : "") + atk);
+                    if (atk != 0) effectStrings.add(String.format(I18n.getString("info.effect.atk"), (atk > 0 ? "+" : ""), atk));
                     int def = cd.getStatChange("/defense");
-                    if (def != 0) effectStrings.add("DEF: " + (def > 0 ? "+" : "") + def);
+                    if (def != 0) effectStrings.add(String.format(I18n.getString("info.effect.def"), (def > 0 ? "+" : ""), def));
                     int rp = cd.getStatChange("/ratePoints");
-                    if (rp != 0) effectStrings.add("RP: " + (rp > 0 ? "+" : "") + rp);
+                    if (rp != 0) effectStrings.add(String.format(I18n.getString("info.effect.rp"), (rp > 0 ? "+" : ""), rp));
                     if (cd.betAmount > 0) {
-                        effectStrings.add("СТАВКА: +" + cd.betAmount);
+                        effectStrings.add(String.format(I18n.getString("info.effect.bet"), cd.betAmount));
                     }
 
                     if (!effectStrings.isEmpty()) {
@@ -588,7 +567,7 @@ public class Main extends Application {
     private void refreshCreaturePane(VBox creaturePane, CreatureState state) {
         creaturePane.getChildren().clear();
 
-        Text name = new Text(state.name);
+        Text name = new Text(state.getLocalizedName());
         name.getStyleClass().add("card-title");
 
         String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
@@ -598,7 +577,7 @@ public class Main extends Application {
         Text statsText = new Text(stats);
         statsText.getStyleClass().add("card-stats");
 
-        Text desc = new Text(state.baseCard.text);
+        Text desc = new Text(state.getLocalizedText());
         desc.getStyleClass().add("card-text");
         desc.wrappingWidthProperty().bind(creaturePane.widthProperty().subtract(12));
 
@@ -610,14 +589,14 @@ public class Main extends Application {
         box.getStyleClass().add("card");
         box.setPadding(new Insets(6));
 
-        Text name = new Text(data.name);
+        Text name = new Text(data.getLocalizedName());
         name.getStyleClass().add("card-title");
 
         VBox buffView = new VBox(4);
         buffView.setPadding(new Insets(2, 0, 0, 0));
 
         if (data.cost > 0) {
-            Text costText = new Text("Стоимость: " + data.cost);
+            Text costText = new Text(String.format(I18n.getString("label.cost"), data.cost));
             costText.getStyleClass().add("card-cost");
             buffView.getChildren().add(costText);
         }
@@ -632,7 +611,7 @@ public class Main extends Application {
             buffView.getChildren().add(statsBox);
         }
 
-        Text desc = new Text(data.text);
+        Text desc = new Text(data.getLocalizedText());
         desc.getStyleClass().add("card-text");
         desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
         buffView.getChildren().add(desc);
@@ -640,10 +619,10 @@ public class Main extends Application {
         VBox betView = new VBox(4);
         betView.setAlignment(Pos.CENTER);
 
-        Text betLabel = new Text("СТАВКА");
+        Text betLabel = new Text(I18n.getString("label.bet"));
         betLabel.getStyleClass().add("card-cost");
 
-        Text betAmountText = new Text("+" + data.betAmount);
+        Text betAmountText = new Text(String.format(I18n.getString("label.betAmount"), data.betAmount));
         betAmountText.getStyleClass().add("bet-amount-text");
 
         betView.getChildren().addAll(betLabel, betAmountText);
@@ -683,10 +662,10 @@ public class Main extends Application {
         box.getStyleClass().add("card");
         box.setPadding(new Insets(6));
 
-        Text name = new Text(data.name);
+        Text name = new Text(data.getLocalizedName());
         name.getStyleClass().add("card-title");
 
-        Text desc = new Text(data.text);
+        Text desc = new Text(data.getLocalizedText());
         desc.getStyleClass().add("card-text");
         desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
 
@@ -721,47 +700,36 @@ public class Main extends Application {
         container.getChildren().add(statText);
     }
 
-    // --- НОВЫЕ МЕТОДЫ ДЛЯ ШКАЛ (ЗАПРОС 1 и 2) ---
-
-    /**
-     * Создает UI-шкалу кубиков атаки
-     */
     private HBox createAttackScale() {
         HBox scale = new HBox(5);
         scale.setAlignment(Pos.CENTER);
         scale.getStyleClass().add("dice-scale");
 
-        Label d1 = new Label("1d6");
+        Label d1 = new Label(I18n.getString("label.diceLabel.1"));
         d1.getStyleClass().add("dice-label");
-        Label d2 = new Label("2d6");
+        Label d2 = new Label(I18n.getString("label.diceLabel.2"));
         d2.getStyleClass().add("dice-label");
-        Label d3 = new Label("3d6");
+        Label d3 = new Label(I18n.getString("label.diceLabel.3"));
         d3.getStyleClass().add("dice-label");
 
         scale.getChildren().addAll(d1, d2, d3);
         return scale;
     }
 
-    /**
-     * Обновляет подсветку на шкале кубиков атаки
-     */
     private void updateAttackScale(HBox scale, int currentAttack) {
-        int diceCount = getDiceCount(currentAttack); // 1, 2, or 3
+        int diceCount = getDiceCount(currentAttack);
         for (int i = 0; i < scale.getChildren().size(); i++) {
             scale.getChildren().get(i).getStyleClass().remove("dice-label-active");
         }
         scale.getChildren().get(diceCount - 1).getStyleClass().add("dice-label-active");
     }
 
-    /**
-     * Создает UI-шкалу наград (Yellow/Green/Red)
-     */
     private VBox createBetRewardScale() {
         VBox scaleVBox = new VBox(5);
         scaleVBox.setAlignment(Pos.CENTER);
         scaleVBox.setPadding(new Insets(5));
 
-        Text title = new Text("Множители ставок (Ставка на C1 / Ставка на C2)");
+        Text title = new Text(I18n.getString("label.attackDice"));
         title.getStyleClass().add("card-text");
 
         betRewardScaleC1Row = createRewardRow("C1");
@@ -771,9 +739,6 @@ public class Main extends Application {
         return scaleVBox;
     }
 
-    /**
-     * Вспомогательный метод для создания одного ряда (Y/G/R)
-     */
     private HBox createRewardRow(String label) {
         HBox row = new HBox(5);
         row.setAlignment(Pos.CENTER);
@@ -794,59 +759,39 @@ public class Main extends Application {
         return row;
     }
 
-    /**
-     * Обновляет подсветку на шкале наград
-     */
     private void updateBetRewardScale() {
         int rpDiff = creature1State.currentRatePoints - creature2State.currentRatePoints;
-
-        // Обновляем ряд для ставок на C1
-        // Является ли C1 фаворитом? (rpDiff > 0)
         updateRewardRow(betRewardScaleC1Row, rpDiff > 0, Math.abs(rpDiff));
-
-        // Обновляем ряд для ставок на C2
-        // Является ли C2 фаворитом? (rpDiff < 0)
         updateRewardRow(betRewardScaleC2Row, rpDiff < 0, Math.abs(rpDiff));
     }
 
-    /**
-     * Вспомогательный метод для подсветки одного ряда (Y/G/R)
-     */
     private void updateRewardRow(HBox row, boolean isFavorite, int diff) {
-        // 0=Label, 1=Y, 2=G, 3=R
         javafx.scene.Node yellow = row.getChildren().get(1);
         javafx.scene.Node green = row.getChildren().get(2);
         javafx.scene.Node red = row.getChildren().get(3);
 
-        // Сброс
         yellow.setOpacity(0.2);
         green.setOpacity(0.2);
         red.setOpacity(0.2);
 
         if (isFavorite) {
-            yellow.setOpacity(1.0); // Ставка на фаворита всегда Желтая
+            yellow.setOpacity(1.0);
         } else {
-            // Ставка на аутсайдера
             if (diff < BET_REWARD_GREEN_THRESHOLD) {
-                yellow.setOpacity(1.0); // Небольшая разница
+                yellow.setOpacity(1.0);
             } else if (diff < BET_REWARD_RED_THRESHOLD) {
-                green.setOpacity(1.0); // Средняя разница
+                green.setOpacity(1.0);
             } else {
-                red.setOpacity(1.0); // Большая разница
+                red.setOpacity(1.0);
             }
         }
     }
 
-    /**
-     * Обновляет все шкалы
-     */
     private void updateAllScales() {
         updateAttackScale(attackScale1, creature1State.currentAttack);
         updateAttackScale(attackScale2, creature2State.currentAttack);
         updateBetRewardScale();
     }
-
-    // --- КОНЕЦ НОВЫХ МЕТОДОВ ---
 
     private void removeCardFromHandById(String cardId) {
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
@@ -856,7 +801,7 @@ public class Main extends Application {
     private void showInfo(String text) {
         Alert a = new Alert(Alert.AlertType.INFORMATION);
         a.setHeaderText(null);
-        a.setTitle("Содержимое");
+        a.setTitle(I18n.getString("info.title"));
         a.setContentText(text);
         a.getDialogPane().setPrefWidth(420);
         a.showAndWait();
@@ -865,7 +810,7 @@ public class Main extends Application {
     private void showError(String title, String text) {
         Alert a = new Alert(Alert.AlertType.ERROR);
         a.setHeaderText(title);
-        a.setTitle("Ошибка");
+        a.setTitle(I18n.getString("error.critical"));
         a.setContentText(text);
         a.getDialogPane().setPrefWidth(420);
         a.showAndWait();
@@ -902,7 +847,6 @@ public class Main extends Application {
         return is;
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1 и 2) Добавлены стили для шкал ---
     private String makeCss() {
         return """
             data:,
@@ -999,7 +943,6 @@ public class Main extends Application {
               -fx-background-color: linear-gradient(#f5f8ff, #ffffff);
             }
             
-            /* --- НОВЫЕ СТИЛИ ДЛЯ ШКАЛ (ЗАПРОС 1 и 2) --- */
             .dice-scale {
               -fx-border-color: #e0e0e0;
               -fx-border-width: 1px;
@@ -1015,34 +958,30 @@ public class Main extends Application {
               -fx-text-fill: #999999;
             }
             .dice-label-active {
-              -fx-background-color: #E50000; /* Цвет Атаки */
+              -fx-background-color: #E50000;
               -fx-text-fill: white;
             }
             
             .bet-scale-label {
               -fx-font-size: 12px;
               -fx-font-weight: bold;
-              -fx-min-width: 30px; /* Для выравнивания */
+              -fx-min-width: 30px;
             }
             .bet-scale-box {
               -fx-stroke: #aaaaaa;
               -fx-stroke-width: 1px;
-              -fx-opacity: 0.2; /* По умолчанию выключены */
+              -fx-opacity: 0.2;
             }
             .bet-scale-yellow { -fx-fill: #FFA500; }
             .bet-scale-green  { -fx-fill: #00A800; }
             .bet-scale-red    { -fx-fill: #E50000; }
-            /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
-            
             """;
     }
 
-    // --- ВНУТРЕННИЕ КЛАССЫ (POJO) ---
-
     public static class CardData {
         public String id;
-        public String name;
-        public String text;
+        public Map<String, String> name;
+        public Map<String, String> text;
         public int cost;
         public int betAmount;
         public int health;
@@ -1053,6 +992,8 @@ public class Main extends Application {
 
         public CardData() {
             this.effects = new ArrayList<>();
+            this.name = new HashMap<>();
+            this.text = new HashMap<>();
         }
 
         public int getStatChange(String path) {
@@ -1067,6 +1008,14 @@ public class Main extends Application {
             }
             return total;
         }
+
+        public String getLocalizedName() {
+            return name.getOrDefault(I18n.getLang(), name.get("en"));
+        }
+
+        public String getLocalizedText() {
+            return text.getOrDefault(I18n.getLang(), text.get("en"));
+        }
     }
 
     public static class Effect {
@@ -1079,6 +1028,7 @@ public class Main extends Application {
     public static class CreatureState {
         public CardData baseCard;
         public String name;
+        public String text;
         public int baseHealth;
         public int currentHealth;
         public int baseAttack;
@@ -1090,7 +1040,8 @@ public class Main extends Application {
 
         public CreatureState(CardData baseCard) {
             this.baseCard = baseCard;
-            this.name = baseCard.name;
+            this.name = baseCard.getLocalizedName();
+            this.text = baseCard.getLocalizedText();
             this.baseHealth = baseCard.health;
             this.currentHealth = baseCard.health;
             this.baseAttack = baseCard.attack;
@@ -1099,6 +1050,13 @@ public class Main extends Application {
             this.currentDefense = baseCard.defense;
             this.baseRatePoints = baseCard.ratePoints;
             this.currentRatePoints = baseCard.ratePoints;
+        }
+
+        public String getLocalizedName() {
+            return this.name;
+        }
+        public String getLocalizedText() {
+            return this.text;
         }
     }
 }
