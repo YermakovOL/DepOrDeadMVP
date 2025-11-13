@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
-import javafx.application.Platform; // Добавлен импорт
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -46,9 +46,7 @@ public class Main extends Application {
     private static final int DEFENSE_TIER_1_MAX = 3;
     private static final int DEFENSE_TIER_2_MAX = 8;
 
-    // --- (ЗАПРОС 1) СКОРОСТЬ БОЯ (в секундах) ---
     private static final double BATTLE_STEP_DELAY = 1.0;
-    // --- КОНЕЦ ---
 
     private static final int BET_REWARD_GREEN_THRESHOLD = 4;
     private static final int BET_REWARD_RED_THRESHOLD = 8;
@@ -86,7 +84,6 @@ public class Main extends Application {
     private Text creature2BetText;
     private HBox attackScale1;
     private HBox attackScale2;
-    private VBox betRewardScaleUI;
     private HBox betRewardScaleC1Row;
     private HBox betRewardScaleC2Row;
     private Text player1ScoreText;
@@ -94,7 +91,6 @@ public class Main extends Application {
     private HBox defenseScale1;
     private HBox defenseScale2;
 
-    // --- ПОЛЯ ДЛЯ БОЯ ---
     private ScrollPane battleLogScroll;
     private VBox battleLogContainer;
     private CreatureState battleAttacker;
@@ -102,6 +98,7 @@ public class Main extends Application {
     private Alert battleDialog;
     private Text battleC1Stats;
     private Text battleC2Stats;
+    private Button battleButton;
 
 
     public static void main(String[] args) {
@@ -124,8 +121,9 @@ public class Main extends Application {
         startGame();
 
         BorderPane root = new BorderPane();
-        root.setPadding(new Insets(16));
+        root.setPadding(new Insets(10));
 
+        // --- 1. ВЕРХНЯЯ ЧАСТЬ (СУЩЕСТВА, ШКАЛЫ, СТОПКИ) ---
         creature1Pane = createCreaturePane(creature1State);
         creature2Pane = createCreaturePane(creature2State);
 
@@ -140,28 +138,50 @@ public class Main extends Application {
         defenseScale1 = createDefenseScale();
         defenseScale2 = createDefenseScale();
 
-        VBox creature1Column = new VBox(5, creature1Pane, creature1BetText, attackScale1, defenseScale1);
+        VBox betRewardScaleC1_UI = createBetRewardScale(I18n.getString("label.betMultiplier"));
+        VBox betRewardScaleC2_UI = createBetRewardScale(I18n.getString("label.betMultiplier"));
+
+        VBox creature1Column = new VBox(5, creature1Pane, creature1BetText, attackScale1, defenseScale1, betRewardScaleC1_UI);
         creature1Column.setAlignment(Pos.CENTER);
-        VBox creature2Column = new VBox(5, creature2Pane, creature2BetText, attackScale2, defenseScale2);
+        VBox creature2Column = new VBox(5, creature2Pane, creature2BetText, attackScale2, defenseScale2, betRewardScaleC2_UI);
         creature2Column.setAlignment(Pos.CENTER);
 
-        centralDropZone1 = createCentralDropZone(creature1State, creature1Pane, 1);
-        centralDropZone2 = createCentralDropZone(creature2State, creature2Pane, 2);
+        centralDropZone1 = createCentralDropZone(creature1Pane, 1);
+        centralDropZone2 = createCentralDropZone(creature2Pane, 2);
 
-        HBox centerCreatures = new HBox(15);
-        centerCreatures.setAlignment(Pos.CENTER);
-        centerCreatures.setPadding(new Insets(10));
-        centerCreatures.getChildren().addAll(
+        HBox topArea = new HBox(15);
+        topArea.setAlignment(Pos.TOP_CENTER);
+        topArea.setPadding(new Insets(10));
+        topArea.getChildren().addAll(
                 creature1Column,
                 centralDropZone1,
                 centralDropZone2,
                 creature2Column
         );
-        root.setTop(centerCreatures);
+        root.setTop(topArea);
 
-        VBox bottom = new VBox(10);
-        bottom.setPadding(new Insets(8));
-        bottom.setAlignment(Pos.CENTER);
+        // --- 2. НИЖНЯЯ ЧАСТЬ (ИНФО, РУКА, КНОПКА) ---
+        VBox mainBottomArea = new VBox(10);
+        mainBottomArea.setPadding(new Insets(10, 5, 5, 5));
+        mainBottomArea.setAlignment(Pos.CENTER);
+
+        turnPointsText = new Text();
+        turnPointsText.getStyleClass().add("card-title");
+        updateTurnPointsText();
+        updateAllScales();
+
+        handBox = new HBox(10);
+        handBox.setPadding(new Insets(10));
+        handBox.setAlignment(Pos.CENTER);
+
+        ScrollPane handScroll = new ScrollPane(handBox);
+        handScroll.setPrefHeight(270);
+        handScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        handScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        handScroll.setFitToHeight(true);
+        handScroll.setMaxWidth(Double.MAX_VALUE);
+        handScroll.getStyleClass().add("hand-scroll-pane");
+        handBox.prefWidthProperty().bind(handScroll.widthProperty().subtract(20));
 
         Button endTurnBtn = new Button(I18n.getString("button.endTurn"));
         endTurnBtn.setMinWidth(180);
@@ -175,39 +195,25 @@ public class Main extends Application {
 
         Region spacerLeft = new Region();
         HBox.setHgrow(spacerLeft, Priority.ALWAYS);
-        Region spacerRight = new Region();
-        HBox.setHgrow(spacerRight, Priority.ALWAYS);
 
-        HBox buttonBar = new HBox(10, player1ScoreText, spacerLeft, endTurnBtn, spacerRight, player2ScoreText);
-        buttonBar.setAlignment(Pos.CENTER);
+        HBox bottomBar = new HBox(10, player1ScoreText, player2ScoreText, spacerLeft, endTurnBtn);
+        bottomBar.setAlignment(Pos.CENTER_LEFT);
+        bottomBar.setPadding(new Insets(10, 0, 0, 0));
 
-        betRewardScaleUI = createBetRewardScale();
+        mainBottomArea.getChildren().addAll(turnPointsText, handScroll, bottomBar);
+        VBox.setVgrow(handScroll, Priority.ALWAYS); // Рука растягивается
 
-        turnPointsText = new Text();
-        turnPointsText.getStyleClass().add("card-title");
-        updateTurnPointsText();
-        updateAllScales();
-
-        handBox = new HBox(8);
-        handBox.setPadding(new Insets(8));
-        handBox.setAlignment(Pos.CENTER);
-
-        ScrollPane handScroll = new ScrollPane(handBox);
-        handScroll.setPrefHeight(170);
-        handScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        handScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        handScroll.setFitToHeight(true);
-        handScroll.setMaxWidth(800);
-
-        bottom.getChildren().addAll(buttonBar, betRewardScaleUI, turnPointsText, handScroll);
-        root.setBottom(bottom);
+        root.setBottom(mainBottomArea);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         updateHandDisplay();
 
-        Scene scene = new Scene(root, 1200, 800);
+        Scene scene = new Scene(root, 1300, 850);
         scene.getStylesheets().add(makeCss());
         stage.setScene(scene);
         stage.setTitle(I18n.getString("app.title"));
+
+        stage.setMaximized(true);
         stage.show();
     }
 
@@ -284,9 +290,7 @@ public class Main extends Application {
         player2ScoreText.setText(String.format(I18n.getString("label.totalScore"), player2TotalScore));
     }
 
-    // --- ИЗМЕНЕНИЕ: Логика боя переписана на автоматическую ---
     private void startBattle() {
-        // 1. Определяем инициативу
         if (creature1State.currentAttack > creature2State.currentAttack) {
             battleAttacker = creature1State;
             battleDefender = creature2State;
@@ -309,6 +313,9 @@ public class Main extends Application {
         battleDialog.getDialogPane().getStylesheets().add(makeCss());
         battleDialog.getDialogPane().setPrefWidth(700);
 
+        battleDialog.getButtonTypes().add(ButtonType.CLOSE);
+        battleDialog.getDialogPane().lookupButton(ButtonType.CLOSE).setVisible(false);
+
         BorderPane battlePane = new BorderPane();
         battlePane.setPadding(new Insets(10));
 
@@ -330,17 +337,19 @@ public class Main extends Application {
         battleLogScroll.setFitToWidth(true);
         battleLogScroll.getStyleClass().add("battle-log-scroll");
 
-        VBox centerContent = new VBox(10, battleLogScroll);
+        battleButton = new Button(I18n.getString("button.fight"));
+        battleButton.setOnAction(e -> playBattleStep());
+
+        VBox centerContent = new VBox(10, battleLogScroll, battleButton);
         centerContent.setAlignment(Pos.CENTER);
         battlePane.setCenter(centerContent);
 
-        // 3. Показываем окно и запускаем цепочку анимаций
         addBattleLog(I18n.getString("battle.start"));
         if (creature1State.currentAttack == creature2State.currentAttack) {
             addBattleLog(I18n.getString("battle.initiative.tie"));
             addBattleLog(String.format(I18n.getString("battle.initiative.tie.even").contains("Четное") ?
-                    (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")) :
-                    (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")),
+                            (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")) :
+                            (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")),
                     0, battleAttacker.getLocalizedName()));
         } else {
             addBattleLog(String.format(I18n.getString("battle.initiative.attack"), battleAttacker.getLocalizedName(), battleAttacker.currentAttack));
@@ -377,15 +386,11 @@ public class Main extends Application {
         battleC2Stats.setText(getCreatureBattleStats(creature2State));
 
         if (battleDefender.currentHealth <= 0) {
-            PauseTransition endDelay = new PauseTransition(Duration.seconds(1.5));
-            endDelay.setOnFinished(e -> {
-                // --- ИСПРАВЛЕНИЕ: Закрываем и используем runLater ---
-                battleDialog.setResult(ButtonType.CLOSE);
+            battleButton.setText(I18n.getString("button.ok"));
+            battleButton.setOnAction(e -> {
                 battleDialog.close();
                 Platform.runLater(() -> processBattleResults(battleAttacker));
-                // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
             });
-            endDelay.play();
             return;
         }
 
@@ -393,7 +398,6 @@ public class Main extends Application {
         battleAttacker = battleDefender;
         battleDefender = temp;
 
-        // --- ИСПОЛЬЗОВАНИЕ КОНСТАНТЫ BATTLE_STEP_DELAY ---
         PauseTransition stepDelay = new PauseTransition(Duration.seconds(BATTLE_STEP_DELAY));
         stepDelay.setOnFinished(e -> playBattleStep());
         stepDelay.play();
@@ -434,12 +438,12 @@ public class Main extends Application {
 
     private String getCreatureBattleStats(CreatureState state) {
         return String.format(I18n.getString("battle.statsHeader"), state.getLocalizedName(), state.currentHealth) +
-               "\n" +
-               String.format(" ATK: %d (%s)", state.currentAttack, I18n.getString("label.diceLabel." + getDiceCount(state.currentAttack))) +
-               "\n" +
-               String.format(" DEF: %d (%s)", state.currentDefense, I18n.getString("label.defenseBlock." + getDefenseBlock(state.currentDefense))) +
-               "\n" +
-               String.format(" RP: %d", state.currentRatePoints);
+                "\n" +
+                String.format(" ATK: %d (%s)", state.currentAttack, I18n.getString("label.diceLabel." + getDiceCount(state.currentAttack))) +
+                "\n" +
+                String.format(" DEF: %d (%s)", state.currentDefense, I18n.getString("label.defenseBlock." + getDefenseBlock(state.currentDefense))) +
+                "\n" +
+                String.format(" RP: %d", state.currentRatePoints);
     }
 
     private RewardTier getRewardTier(CreatureState betOn, CreatureState opponent) {
@@ -491,49 +495,51 @@ public class Main extends Application {
     }
 
     private void showEndGameDialog(String winnerName, int p1Winnings, int p2Winnings, RewardTier tier) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(I18n.getString("game.endTitle"));
-        alert.setHeaderText(String.format(I18n.getString("battle.winner"), winnerName));
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle(I18n.getString("game.endTitle"));
+            alert.setHeaderText(String.format(I18n.getString("battle.winner"), winnerName));
 
-        Label p1Label = new Label(I18n.getString("label.player1") + " " + I18n.getString("game.winnings.simple") + ":");
-        Label p1Amount = new Label("" + p1Winnings);
-        p1Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
+            Label p1Label = new Label(I18n.getString("label.player1") + " " + I18n.getString("game.winnings.simple") + ":");
+            Label p1Amount = new Label("" + p1Winnings);
+            p1Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
 
-        Label p2Label = new Label(I18n.getString("label.player2") + " " + I18n.getString("game.winnings.simple") + ":");
-        Label p2Amount = new Label("" + p2Winnings);
-        p2Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
+            Label p2Label = new Label(I18n.getString("label.player2") + " " + I18n.getString("game.winnings.simple") + ":");
+            Label p2Amount = new Label("" + p2Winnings);
+            p2Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
 
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(p1Label, 0, 0);
-        grid.add(p1Amount, 1, 0);
-        grid.add(p2Label, 0, 1);
-        grid.add(p2Amount, 1, 1);
+            GridPane grid = new GridPane();
+            grid.setHgap(10);
+            grid.setVgap(10);
+            grid.add(p1Label, 0, 0);
+            grid.add(p1Amount, 1, 0);
+            grid.add(p2Label, 0, 1);
+            grid.add(p2Amount, 1, 1);
 
-        alert.getDialogPane().setContent(grid);
-        alert.getDialogPane().getStylesheets().add(makeCss());
+            alert.getDialogPane().setContent(grid);
+            alert.getDialogPane().getStylesheets().add(makeCss());
 
-        alert.showAndWait();
+            alert.showAndWait();
 
-        if (currentBattle >= MAX_BATTLES) {
-            Alert matchOverAlert = new Alert(Alert.AlertType.INFORMATION);
-            matchOverAlert.setTitle(I18n.getString("game.matchOver.title"));
-            matchOverAlert.setHeaderText(null);
-            matchOverAlert.setContentText(String.format(I18n.getString("game.matchOver.content"),
-                    MAX_BATTLES, player1TotalScore, player2TotalScore));
-            matchOverAlert.getButtonTypes().setAll(new ButtonType(I18n.getString("game.matchOver.newMatch")));
-            matchOverAlert.showAndWait();
+            if (currentBattle >= MAX_BATTLES) {
+                Alert matchOverAlert = new Alert(Alert.AlertType.INFORMATION);
+                matchOverAlert.setTitle(I18n.getString("game.matchOver.title"));
+                matchOverAlert.setHeaderText(null);
+                matchOverAlert.setContentText(String.format(I18n.getString("game.matchOver.content"),
+                        MAX_BATTLES, player1TotalScore, player2TotalScore));
+                matchOverAlert.getButtonTypes().setAll(new ButtonType(I18n.getString("game.matchOver.newMatch")));
+                matchOverAlert.showAndWait();
 
-            player1TotalScore = 0;
-            player2TotalScore = 0;
-            currentBattle = 1;
-            updatePlayerTotalScores();
-        } else {
-            currentBattle++;
-        }
+                player1TotalScore = 0;
+                player2TotalScore = 0;
+                currentBattle = 1;
+                updatePlayerTotalScores();
+            } else {
+                currentBattle++;
+            }
 
-        restartGame();
+            restartGame();
+        });
     }
 
     private void restartGame() {
@@ -560,24 +566,6 @@ public class Main extends Application {
         updateAllScales();
     }
 
-    // --- НОВЫЙ МЕТОД: Обновляет ссылки в центральных стопках после рестарта ---
-    private void updateCentralDropZonesReferences() {
-        // Нам нужно полностью пересоздать поведение стопок с НОВЫМИ state и pane
-
-        // Удаляем старые стопки из UI
-        HBox centerBox = (HBox) creature1Pane.getParent();
-        centerBox.getChildren().remove(centralDropZone1);
-        centerBox.getChildren().remove(centralDropZone2);
-
-        // Создаем новые стопки с новыми ссылками
-        centralDropZone1 = createCentralDropZone(creature1State, creature1Pane, 1);
-        centralDropZone2 = createCentralDropZone(creature2State, creature2Pane, 2);
-
-        // Вставляем их обратно в нужное место (индексы 1 и 2)
-        centerBox.getChildren().add(1, centralDropZone1);
-        centerBox.getChildren().add(2, centralDropZone2);
-    }
-
     private void clearDropZone(VBox dropZone) {
         dropZone.getChildren().clear();
         if (dropZone.getUserData() instanceof List) {
@@ -592,9 +580,9 @@ public class Main extends Application {
         for (CardData card : currentHand) {
             VBox cardNode = createHandCardNode(card);
             cardNode.getStyleClass().add("hand-card");
-            cardNode.setPrefSize(150, 140);
-            cardNode.setMinSize(150, 140);
-            cardNode.setMaxSize(150, 140);
+            cardNode.setPrefSize(170, 240);
+            cardNode.setMinSize(170, 240);
+            cardNode.setMaxSize(170, 240);
             handBox.getChildren().add(cardNode);
         }
     }
@@ -622,7 +610,7 @@ public class Main extends Application {
         return creatureCardPane;
     }
 
-    private VBox createCentralDropZone(CreatureState targetState, VBox targetPane, int targetBetId) {
+    private VBox createCentralDropZone(VBox targetPane, int targetBetId) {
         VBox dropArea = new VBox(4);
         dropArea.setPrefSize(220, 180);
         dropArea.setMinSize(220, 180);
@@ -664,7 +652,6 @@ public class Main extends Application {
                     removeCardFromHandById(cardId);
 
                     if ("buff".equals(mode)) {
-                        // Получаем актуальный state из панели
                         CreatureState currentState = (CreatureState) targetPane.getUserData();
                         if (cd.effects != null) {
                             for (Effect effect : cd.effects) {
@@ -775,39 +762,25 @@ public class Main extends Application {
 
         Text desc = new Text(state.getLocalizedText());
         desc.getStyleClass().add("card-text");
-        desc.wrappingWidthProperty().bind(creaturePane.widthProperty().subtract(12));
+        desc.wrappingWidthProperty().bind(creaturePane.widthProperty().subtract(16));
 
         creaturePane.getChildren().addAll(name, statsText, desc);
     }
 
     private VBox createHandCardNode(CardData data) {
-        VBox box = new VBox(4);
+        VBox box = new VBox(5);
         box.getStyleClass().add("card");
-        box.setPadding(new Insets(8)); // Чуть больше отступ
+        box.setPadding(new Insets(10));
 
         Text name = new Text(data.getLocalizedName());
         name.getStyleClass().add("card-title");
+        name.wrappingWidthProperty().bind(box.widthProperty().subtract(16));
 
-        VBox buffView = new VBox(4);
+        VBox buffView = new VBox(5);
         buffView.setPadding(new Insets(2, 0, 0, 0));
 
-        // --- ИЗМЕНЕНИЕ: Всегда показываем ставку внизу ---
-        // Создаем контейнер для нижней части (цена и ставка)
-        BorderPane footer = new BorderPane();
-
-        if (data.cost > 0) {
-            Text costText = new Text(String.format(I18n.getString("label.cost"), data.cost));
-            costText.getStyleClass().add("card-cost");
-            footer.setLeft(costText);
-        }
-
-        // Маленькая плашка со ставкой
-        Text betHint = new Text("$" + data.betAmount);
-        betHint.getStyleClass().add("card-bet-hint"); // Новый стиль
-        footer.setRight(betHint);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
-
-        HBox statsBox = new HBox(8);
+        FlowPane statsBox = new FlowPane(8, 4);
+        statsBox.setAlignment(Pos.CENTER_LEFT);
         addStatChangeText(statsBox, "HP", data.getStatChange("/health"), "hp");
         addStatChangeText(statsBox, "ATK", data.getStatChange("/attack"), "atk");
         addStatChangeText(statsBox, "DEF", data.getStatChange("/defense"), "def");
@@ -818,30 +791,55 @@ public class Main extends Application {
         }
 
         Text desc = new Text(data.getLocalizedText());
-        desc.getStyleClass().add("card-text"); // Увеличим шрифт в CSS
+        desc.getStyleClass().add("card-text");
         desc.wrappingWidthProperty().bind(box.widthProperty().subtract(16));
-        buffView.getChildren().add(desc);
 
-        // --- РЕЖИМ СТАВКИ (БОЛЬШОЙ) ---
+        Region buffSpacer = new Region();
+        VBox.setVgrow(buffSpacer, Priority.ALWAYS);
+
+        BorderPane buffFooter = new BorderPane();
+        if (data.cost > 0) {
+            Text costText = new Text(String.format(I18n.getString("label.cost"), data.cost));
+            costText.getStyleClass().add("card-cost");
+            buffFooter.setLeft(costText);
+        }
+        Text betHint = new Text("$" + data.betAmount);
+        betHint.getStyleClass().add("card-bet-hint");
+        buffFooter.setRight(betHint);
+
+        buffView.getChildren().addAll(desc, buffSpacer, buffFooter);
+        VBox.setVgrow(buffView, Priority.ALWAYS);
+
         VBox betView = new VBox(4);
         betView.setAlignment(Pos.CENTER);
+        betView.setPadding(new Insets(10, 0, 0, 0));
+
+        Region betSpacer = new Region();
+        VBox.setVgrow(betSpacer, Priority.ALWAYS);
+
         Text betLabel = new Text(I18n.getString("label.bet"));
         betLabel.getStyleClass().add("card-cost");
         Text betAmountText = new Text(String.format(I18n.getString("label.betAmount"), data.betAmount));
         betAmountText.getStyleClass().add("bet-amount-text");
-        betView.getChildren().addAll(betLabel, betAmountText);
+
+        Region betSpacer2 = new Region();
+        VBox.setVgrow(betSpacer2, Priority.ALWAYS);
+
+        betView.getChildren().addAll(betSpacer, betLabel, betAmountText, betSpacer2);
 
         betView.setVisible(false);
         betView.setManaged(false);
 
-        // Добавляем footer в конец
-        box.getChildren().addAll(name, buffView, betView, new Region(), footer);
-        VBox.setVgrow(footer, Priority.ALWAYS); // Прижимаем footer к низу
+        StackPane contentStack = new StackPane(buffView, betView);
+        VBox.setVgrow(contentStack, Priority.ALWAYS);
+
+        box.getChildren().addAll(name, contentStack);
 
         box.getProperties().put("isBet", false);
         box.setOnMouseClicked(ev -> {
             boolean isBet = (boolean) box.getProperties().get("isBet");
             box.getProperties().put("isBet", !isBet);
+
             buffView.setVisible(isBet);
             buffView.setManaged(isBet);
             betView.setVisible(!isBet);
@@ -851,6 +849,7 @@ public class Main extends Application {
         box.setOnDragDetected(ev -> {
             boolean isBet = (boolean) box.getProperties().get("isBet");
             String mode = isBet ? "bet" : "buff";
+
             Dragboard db = box.startDragAndDrop(TransferMode.MOVE);
             ClipboardContent content = new ClipboardContent();
             content.putString(data.id + ";" + mode);
@@ -868,6 +867,7 @@ public class Main extends Application {
 
         Text name = new Text(data.getLocalizedName());
         name.getStyleClass().add("card-title");
+        name.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
 
         Text desc = new Text(data.getLocalizedText());
         desc.getStyleClass().add("card-text");
@@ -889,7 +889,7 @@ public class Main extends Application {
         return box;
     }
 
-    private void addStatChangeText(HBox container, String prefix, int value, String styleType) {
+    private void addStatChangeText(FlowPane container, String prefix, int value, String styleType) {
         if (value == 0) {
             return;
         }
@@ -930,11 +930,10 @@ public class Main extends Application {
         }
     }
 
-    // --- НОВЫЙ МЕТОД: (ЗАПРОС 2) Создает UI-шкалу защиты ---
     private HBox createDefenseScale() {
         HBox scale = new HBox(5);
         scale.setAlignment(Pos.CENTER);
-        scale.getStyleClass().add("defense-scale"); // Новый CSS
+        scale.getStyleClass().add("defense-scale");
 
         Label d1 = new Label(I18n.getString("label.defenseBlock.1"));
         d1.getStyleClass().add("defense-label");
@@ -957,27 +956,28 @@ public class Main extends Application {
         }
     }
 
-    private VBox createBetRewardScale() {
-        VBox scaleVBox = new VBox(5);
+    private VBox createBetRewardScale(String creatureLabel) {
+        VBox scaleVBox = new VBox(2);
         scaleVBox.setAlignment(Pos.CENTER);
-        scaleVBox.setPadding(new Insets(5));
 
-        Text title = new Text(I18n.getString("label.attackDice"));
-        title.getStyleClass().add("card-text");
+        Text title = new Text(creatureLabel);
+        title.getStyleClass().add("bet-scale-title");
 
-        betRewardScaleC1Row = createRewardRow("C1");
-        betRewardScaleC2Row = createRewardRow("C2");
+        HBox row = createRewardRow();
 
-        scaleVBox.getChildren().addAll(title, betRewardScaleC1Row, betRewardScaleC2Row);
+        if (betRewardScaleC1Row == null) {
+            betRewardScaleC1Row = row;
+        } else {
+            betRewardScaleC2Row = row;
+        }
+
+        scaleVBox.getChildren().addAll(title, row);
         return scaleVBox;
     }
 
-    private HBox createRewardRow(String label) {
+    private HBox createRewardRow() {
         HBox row = new HBox(5);
         row.setAlignment(Pos.CENTER);
-
-        Label rowLabel = new Label(label + ":");
-        rowLabel.getStyleClass().add("bet-scale-label");
 
         Rectangle yellow = new Rectangle(20, 20);
         yellow.getStyleClass().addAll("bet-scale-box", "bet-scale-yellow");
@@ -986,11 +986,11 @@ public class Main extends Application {
         Rectangle red = new Rectangle(20, 20);
         red.getStyleClass().addAll("bet-scale-box", "bet-scale-red");
 
-        row.getChildren().addAll(rowLabel, yellow, green, red);
+        row.getChildren().addAll(yellow, green, red);
         return row;
     }
 
-    private void updateBetRewardScale() {
+    private void updateBetRewardScales() {
         if (creature1State == null || creature2State == null) return;
         int rpDiff = creature1State.currentRatePoints - creature2State.currentRatePoints;
         updateRewardRow(betRewardScaleC1Row, rpDiff > 0, Math.abs(rpDiff));
@@ -998,9 +998,9 @@ public class Main extends Application {
     }
 
     private void updateRewardRow(HBox row, boolean isFavorite, int diff) {
-        javafx.scene.Node yellow = row.getChildren().get(1);
-        javafx.scene.Node green = row.getChildren().get(2);
-        javafx.scene.Node red = row.getChildren().get(3);
+        javafx.scene.Node yellow = row.getChildren().get(0);
+        javafx.scene.Node green = row.getChildren().get(1);
+        javafx.scene.Node red = row.getChildren().get(2);
 
         yellow.setOpacity(0.2);
         green.setOpacity(0.2);
@@ -1025,7 +1025,7 @@ public class Main extends Application {
             updateAttackScale(attackScale2, creature2State.currentAttack);
             updateDefenseScale(defenseScale1, creature1State.currentDefense);
             updateDefenseScale(defenseScale2, creature2State.currentDefense);
-            updateBetRewardScale();
+            updateBetRewardScales();
         }
     }
 
@@ -1089,7 +1089,6 @@ public class Main extends Application {
         return is;
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) CSS для шкалы защиты ---
     private String makeCss() {
         return """
             data:,
@@ -1098,7 +1097,7 @@ public class Main extends Application {
               -fx-border-color: #cbd7ff;
               -fx-border-radius: 10;
               -fx-background-radius: 10;
-              -fx-padding: 10; /* Больше отступ */
+              -fx-padding: 10;
               -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.06), 6, 0, 0, 2);
             }
             .creature-pane-hover {
@@ -1107,16 +1106,15 @@ public class Main extends Application {
             }
             .card-title {
               -fx-font-weight: bold;
-              -fx-font-size: 16px; /* Было 14 */
+              -fx-font-size: 15px;
             }
             .card-cost {
               -fx-font-size: 13px;
               -fx-fill: #0066cc;
               -fx-font-weight: bold;
-              -fx-padding: 2 0 0 0;
             }
             .card-bet-hint {
-              -fx-font-size: 13px;
+              -fx-font-size: 14px;
               -fx-fill: #008800;
               -fx-font-weight: bold;
             }
@@ -1150,7 +1148,7 @@ public class Main extends Application {
             .card-stat-atk-pos, .card-stat-atk-neg,
             .card-stat-def-pos, .card-stat-def-neg,
             .card-stat-rp-pos, .card-stat-rp-neg {
-              -fx-font-size: 14px;
+              -fx-font-size: 13px;
               -fx-font-weight: bold;
             }
             .card-stat-hp-pos  { -fx-fill: #00A800; }
@@ -1163,13 +1161,13 @@ public class Main extends Application {
             .card-stat-rp-neg  { -fx-fill: #8B4513; }
             
             .card-stats {
-              -fx-font-size: 13px;
+              -fx-font-size: 14px;
               -fx-fill: #333333;
               -fx-font-weight: bold;
               -fx-padding: 2 0 0 0;
             }
             .card-text {
-              -fx-font-size: 14px;
+              -fx-font-size: 13px;
               -fx-fill: #333333;
               -fx-font-style: italic;
             }
@@ -1228,10 +1226,14 @@ public class Main extends Application {
               -fx-text-fill: white;
             }
             
+            .bet-scale-title {
+                -fx-font-size: 11px;
+                -fx-font-weight: bold;
+                -fx-fill: #555555;
+            }
             .bet-scale-label {
-              -fx-font-size: 12px;
+              -fx-font-size: 13px;
               -fx-font-weight: bold;
-              -fx-min-width: 30px;
             }
             .bet-scale-box {
               -fx-stroke: #aaaaaa;
@@ -1265,6 +1267,12 @@ public class Main extends Application {
                 -fx-font-size: 16px;
                 -fx-font-weight: bold;
                 -fx-fill: #222222;
+            }
+            .hand-scroll-pane {
+                -fx-background-color: transparent;
+                -fx-background-insets: 0;
+                -fx-padding: 0;
+                -fx-border-color: transparent;
             }
             """;
     }
