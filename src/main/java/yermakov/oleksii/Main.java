@@ -10,6 +10,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.input.ClipboardContent;
@@ -29,27 +30,37 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class Main extends Application {
 
+    // --- КОНСТАНТЫ ИГРЫ ---
     private static final String CREATURES_FILE = "creatures.json";
     private static final String INFLUENCE_FILE = "influenceCards.json";
     private static final int STARTING_HAND_SIZE = 5;
     private static final int MAX_HAND_SIZE = 5;
     private static final int MAX_TURN_POINTS = 4;
-    private static final int MAX_ROUNDS = 4;
-    private int currentRound = 1;
 
+    // --- (ЗАПРОС 3) ---
+    private static final int MAX_ROUNDS_PER_BATTLE = 4;
+    private static final int MAX_BATTLES = 3;
+    private int currentRound = 1;
+    private int currentBattle = 1;
+
+    // --- КОНСТАНТЫ БОЯ ---
     private static final int ATTACK_TIER_1_MAX = 6;
     private static final int ATTACK_TIER_2_MAX = 14;
 
+    // --- (ЗАПРОС 2) КОНСТАНТЫ НАГРАД ---
     private static final int BET_REWARD_GREEN_THRESHOLD = 4;
     private static final int BET_REWARD_RED_THRESHOLD = 8;
     private static final double REWARD_YELLOW_MULT = 1.0;
     private static final double REWARD_GREEN_MULT = 2.0;
     private static final double REWARD_RED_MULT = 3.0;
+    private enum RewardTier { YELLOW, GREEN, RED }
 
+    // --- СПИСКИ КАРТ ---
     private final Map<String, CardData> allCards = new HashMap<>();
     private final List<CardData> creatureTemplates = new ArrayList<>();
     private final List<CardData> influenceDeck = new ArrayList<>();
 
+    // --- СОСТОЯНИЕ (STATE) ---
     private CreatureState creature1State;
     private CreatureState creature2State;
     private enum Player { PLAYER_1, PLAYER_2 }
@@ -62,6 +73,11 @@ public class Main extends Application {
     private int p1_BetsOn_C2 = 0;
     private int p2_BetsOn_C2 = 0;
 
+    // --- (ЗАПРОС 3) ПОСТОЯННАЯ СТАТИСТИКА ---
+    private int player1TotalScore = 0;
+    private int player2TotalScore = 0;
+
+    // --- UI REFERENCES ---
     private HBox handBox;
     private Text turnPointsText;
     private VBox creature1Pane;
@@ -70,12 +86,13 @@ public class Main extends Application {
     private VBox centralDropZone2;
     private Text creature1BetText;
     private Text creature2BetText;
-
     private HBox attackScale1;
     private HBox attackScale2;
     private VBox betRewardScaleUI;
     private HBox betRewardScaleC1Row;
     private HBox betRewardScaleC2Row;
+    private Text player1ScoreText; // (ЗАПРОС 4)
+    private Text player2ScoreText; // (ЗАПРОС 4)
 
 
     public static void main(String[] args) {
@@ -135,12 +152,25 @@ public class Main extends Application {
         bottom.setPadding(new Insets(8));
         bottom.setAlignment(Pos.CENTER);
 
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 4) UI Статистики ---
         Button endTurnBtn = new Button(I18n.getString("button.endTurn"));
         endTurnBtn.setMinWidth(180);
         endTurnBtn.setOnAction(e -> endTurn());
 
-        HBox buttonBar = new HBox(10, endTurnBtn);
+        player1ScoreText = new Text();
+        player1ScoreText.getStyleClass().add("score-text");
+        player2ScoreText = new Text();
+        player2ScoreText.getStyleClass().add("score-text");
+        updatePlayerTotalScores(); // Установить "Общий счет: 0"
+
+        Region spacerLeft = new Region();
+        HBox.setHgrow(spacerLeft, Priority.ALWAYS);
+        Region spacerRight = new Region();
+        HBox.setHgrow(spacerRight, Priority.ALWAYS);
+
+        HBox buttonBar = new HBox(10, player1ScoreText, spacerLeft, endTurnBtn, spacerRight, player2ScoreText);
         buttonBar.setAlignment(Pos.CENTER);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         betRewardScaleUI = createBetRewardScale();
 
@@ -193,15 +223,17 @@ public class Main extends Application {
         }
     }
 
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 5) Логика 3-х боев ---
     private void endTurn() {
         if (currentPlayer == Player.PLAYER_1) {
             currentPlayer = Player.PLAYER_2;
             currentTurnPointsUsed = 0;
             drawCardsToMax(Player.PLAYER_2);
         } else {
-            if (currentRound >= MAX_ROUNDS) {
-                startBattle();
-                return; // Выход, чтобы не обновлять UI до перезапуска
+            // Ход 2-го игрока завершен, раунд окончен
+            if (currentRound >= MAX_ROUNDS_PER_BATTLE) {
+                startBattle(); // Запускаем бой
+                return; // Выходим, т.к. startBattle сам вызовет restartGame
             } else {
                 currentRound++;
                 currentPlayer = Player.PLAYER_1;
@@ -213,6 +245,7 @@ public class Main extends Application {
         updateHandDisplay();
         updateAllScales();
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void drawCardsToMax(Player player) {
         List<CardData> currentHand = (player == Player.PLAYER_1) ? player1Hand : player2Hand;
@@ -225,11 +258,15 @@ public class Main extends Application {
         }
     }
 
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3, 5) Обновлен текст ---
     private void updateTurnPointsText() {
         String playerLabel = (currentPlayer == Player.PLAYER_1) ? I18n.getString("label.player1") : I18n.getString("label.player2");
-        turnPointsText.setText(String.format(I18n.getString("label.turnInfo"),
-                currentRound, MAX_ROUNDS, playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
+        turnPointsText.setText(String.format("Бой %d/%d | Раунд: %d/%d | Ход: %s | Очки: %d/%d",
+                currentBattle, MAX_BATTLES,
+                currentRound, MAX_ROUNDS_PER_BATTLE,
+                playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void updateBetDisplays() {
         int totalOnC1 = p1_BetsOn_C1 + p2_BetsOn_C1;
@@ -238,11 +275,17 @@ public class Main extends Application {
         creature2BetText.setText(String.format(I18n.getString("label.bets"), totalOnC2));
     }
 
+    // --- НОВЫЙ МЕТОД: (ЗАПРОС 4) Обновление UI статистики ---
+    private void updatePlayerTotalScores() {
+        player1ScoreText.setText(String.format(I18n.getString("label.totalScore"), player1TotalScore));
+        player2ScoreText.setText(String.format(I18n.getString("label.totalScore"), player2TotalScore));
+    }
+    // --- КОНЕЦ НОВОГО МЕТОДА ---
+
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Логика боя обновлена ---
     private void startBattle() {
         StringBuilder battleLog = new StringBuilder(I18n.getString("battle.start"));
-
-        CreatureState attacker;
-        CreatureState defender;
+        CreatureState attacker, defender;
 
         if (creature1State.currentAttack > creature2State.currentAttack) {
             attacker = creature1State;
@@ -285,45 +328,59 @@ public class Main extends Application {
         String winnerName;
         int player1Winnings;
         int player2Winnings;
+        RewardTier winnerTier;
 
         if (creature1State.currentHealth > 0) {
             winnerName = creature1State.getLocalizedName();
-            player1Winnings = (int)(p1_BetsOn_C1 * getRewardMultiplier(creature1State, creature2State));
-            player2Winnings = (int)(p2_BetsOn_C1 * getRewardMultiplier(creature1State, creature2State));
+            winnerTier = getRewardTier(creature1State, creature2State);
+            player1Winnings = (int)(p1_BetsOn_C1 * getRewardMultiplier(winnerTier));
+            player2Winnings = (int)(p2_BetsOn_C1 * getRewardMultiplier(winnerTier));
         } else {
             winnerName = creature2State.getLocalizedName();
-            player1Winnings = (int)(p1_BetsOn_C2 * getRewardMultiplier(creature2State, creature1State));
-            player2Winnings = (int)(p2_BetsOn_C2 * getRewardMultiplier(creature2State, creature1State));
+            winnerTier = getRewardTier(creature2State, creature1State);
+            player1Winnings = (int)(p1_BetsOn_C2 * getRewardMultiplier(winnerTier));
+            player2Winnings = (int)(p2_BetsOn_C2 * getRewardMultiplier(winnerTier));
         }
+
+        // (ЗАПРОС 3) Добавляем выигрыш к общему счету
+        player1TotalScore += player1Winnings;
+        player2TotalScore += player2Winnings;
+        updatePlayerTotalScores(); // Немедленно обновляем UI
 
         battleLog.append("\n").append(String.format(I18n.getString("battle.winner"), winnerName));
 
-        String winningsMessage = String.format(
-                I18n.getString("game.winnings"),
-                player1Winnings,
-                player2Winnings
-        );
-
         showInfo(battleLog.toString());
-        showEndGameSplashAndRestart(String.format(I18n.getString("battle.winner"), winnerName), winningsMessage);
+        // (ЗАПРОС 1) Вызываем новый диалог
+        showEndGameDialog(winnerName, player1Winnings, player2Winnings, winnerTier);
     }
 
-    private double getRewardMultiplier(CreatureState betOn, CreatureState opponent) {
+    // --- ИЗМЕНЕНИЕ: Разделение на Tier и Multiplier ---
+    private RewardTier getRewardTier(CreatureState betOn, CreatureState opponent) {
         int rpDiff = betOn.currentRatePoints - opponent.currentRatePoints;
 
         if (rpDiff > 0) {
-            return REWARD_YELLOW_MULT;
+            return RewardTier.YELLOW;
         } else {
             int diff = Math.abs(rpDiff);
             if (diff < BET_REWARD_GREEN_THRESHOLD) {
-                return REWARD_YELLOW_MULT;
+                return RewardTier.YELLOW;
             }
             if (diff < BET_REWARD_RED_THRESHOLD) {
-                return REWARD_GREEN_MULT;
+                return RewardTier.GREEN;
             }
-            return REWARD_RED_MULT;
+            return RewardTier.RED;
         }
     }
+
+    private double getRewardMultiplier(RewardTier tier) {
+        switch (tier) {
+            case GREEN: return REWARD_GREEN_MULT;
+            case RED: return REWARD_RED_MULT;
+            case YELLOW:
+            default: return REWARD_YELLOW_MULT;
+        }
+    }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private int getDiceCount(int attack) {
         if (attack <= ATTACK_TIER_1_MAX) {
@@ -335,31 +392,59 @@ public class Main extends Application {
         return 3;
     }
 
-    private void showEndGameSplashAndRestart(String winnerMessage, String winningsMessage) {
-        Stage splashStage = new Stage();
-        splashStage.initModality(Modality.APPLICATION_MODAL);
-        splashStage.initOwner(creature1Pane.getScene().getWindow());
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1, 2, 5) Заменено на диалог Alert ---
+    private void showEndGameDialog(String winnerName, int p1Winnings, int p2Winnings, RewardTier tier) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(I18n.getString("game.endTitle"));
+        alert.setHeaderText(String.format(I18n.getString("battle.winner"), winnerName));
 
-        Label label = new Label(winnerMessage);
-        label.getStyleClass().add("card-title");
-        Label labelWinnings = new Label(winningsMessage);
-        labelWinnings.getStyleClass().add("card-stats");
+        // Создаем цветные лейблы для выигрыша
+        Label p1Label = new Label(I18n.getString("label.player1") + " " + I18n.getString("game.winnings.simple") + ":");
+        Label p1Amount = new Label("" + p1Winnings);
+        p1Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
 
-        VBox splashRoot = new VBox(10, label, labelWinnings);
-        splashRoot.setAlignment(Pos.CENTER);
-        splashRoot.setPadding(new Insets(50));
+        Label p2Label = new Label(I18n.getString("label.player2") + " " + I18n.getString("game.winnings.simple") + ":");
+        Label p2Amount = new Label("" + p2Winnings);
+        p2Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
 
-        splashStage.setScene(new Scene(splashRoot));
-        splashStage.setTitle(I18n.getString("game.endTitle"));
-        splashStage.show();
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(p1Label, 0, 0);
+        grid.add(p1Amount, 1, 0);
+        grid.add(p2Label, 0, 1);
+        grid.add(p2Amount, 1, 1);
 
-        PauseTransition delay = new PauseTransition(Duration.seconds(2));
-        delay.setOnFinished(e -> {
-            splashStage.close();
-            restartGame();
-        });
-        delay.play();
+        alert.getDialogPane().setContent(grid);
+        alert.getDialogPane().getStylesheets().add(makeCss()); // Применяем CSS к диалогу
+
+        // (ЗАПРОС 1) Ждем нажатия ОК
+        alert.showAndWait();
+
+        // (ЗАПРОС 5) Логика 3-х боев
+        if (currentBattle >= MAX_BATTLES) {
+            // Матч окончен
+            Alert matchOverAlert = new Alert(Alert.AlertType.INFORMATION);
+            matchOverAlert.setTitle(I18n.getString("game.matchOver.title"));
+            matchOverAlert.setHeaderText(null);
+            matchOverAlert.setContentText(String.format(I18n.getString("game.matchOver.content"),
+                    MAX_BATTLES, player1TotalScore, player2TotalScore));
+            matchOverAlert.getButtonTypes().setAll(new ButtonType(I18n.getString("game.matchOver.newMatch")));
+            matchOverAlert.showAndWait();
+
+            // Сброс статистики матча
+            player1TotalScore = 0;
+            player2TotalScore = 0;
+            currentBattle = 1;
+            updatePlayerTotalScores();
+        } else {
+            // Следующий бой
+            currentBattle++;
+        }
+
+        restartGame();
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void restartGame() {
         currentRound = 1;
@@ -721,7 +806,9 @@ public class Main extends Application {
         for (int i = 0; i < scale.getChildren().size(); i++) {
             scale.getChildren().get(i).getStyleClass().remove("dice-label-active");
         }
-        scale.getChildren().get(diceCount - 1).getStyleClass().add("dice-label-active");
+        if (diceCount > 0) {
+            scale.getChildren().get(diceCount - 1).getStyleClass().add("dice-label-active");
+        }
     }
 
     private VBox createBetRewardScale() {
@@ -760,6 +847,7 @@ public class Main extends Application {
     }
 
     private void updateBetRewardScale() {
+        if (creature1State == null || creature2State == null) return;
         int rpDiff = creature1State.currentRatePoints - creature2State.currentRatePoints;
         updateRewardRow(betRewardScaleC1Row, rpDiff > 0, Math.abs(rpDiff));
         updateRewardRow(betRewardScaleC2Row, rpDiff < 0, Math.abs(rpDiff));
@@ -788,9 +876,11 @@ public class Main extends Application {
     }
 
     private void updateAllScales() {
-        updateAttackScale(attackScale1, creature1State.currentAttack);
-        updateAttackScale(attackScale2, creature2State.currentAttack);
-        updateBetRewardScale();
+        if (attackScale1 != null) {
+            updateAttackScale(attackScale1, creature1State.currentAttack);
+            updateAttackScale(attackScale2, creature2State.currentAttack);
+            updateBetRewardScale();
+        }
     }
 
     private void removeCardFromHandById(String cardId) {
@@ -975,6 +1065,15 @@ public class Main extends Application {
             .bet-scale-yellow { -fx-fill: #FFA500; }
             .bet-scale-green  { -fx-fill: #00A800; }
             .bet-scale-red    { -fx-fill: #E50000; }
+            
+            .score-text {
+              -fx-font-size: 16px;
+              -fx-font-weight: bold;
+              -fx-fill: #333333;
+            }
+            .reward-yellow { -fx-fill: #FFA500; -fx-font-weight: bold; -fx-font-size: 14px; }
+            .reward-green  { -fx-fill: #00A800; -fx-font-weight: bold; -fx-font-size: 14px; }
+            .reward-red    { -fx-fill: #E50000; -fx-font-weight: bold; -fx-font-size: 14px; }
             """;
     }
 
