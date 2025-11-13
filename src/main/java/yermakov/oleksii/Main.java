@@ -30,24 +30,24 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class Main extends Application {
 
-    // --- КОНСТАНТЫ ИГРЫ ---
     private static final String CREATURES_FILE = "creatures.json";
     private static final String INFLUENCE_FILE = "influenceCards.json";
     private static final int STARTING_HAND_SIZE = 5;
     private static final int MAX_HAND_SIZE = 5;
     private static final int MAX_TURN_POINTS = 4;
-
-    // --- (ЗАПРОС 3) ---
     private static final int MAX_ROUNDS_PER_BATTLE = 4;
     private static final int MAX_BATTLES = 3;
     private int currentRound = 1;
     private int currentBattle = 1;
 
-    // --- КОНСТАНТЫ БОЯ ---
     private static final int ATTACK_TIER_1_MAX = 6;
     private static final int ATTACK_TIER_2_MAX = 14;
 
-    // --- (ЗАПРОС 2) КОНСТАНТЫ НАГРАД ---
+    // --- (ЗАПРОС 1) НОВЫЕ КОНСТАНТЫ ЗАЩИТЫ ---
+    private static final int DEFENSE_TIER_1_MAX = 3;
+    private static final int DEFENSE_TIER_2_MAX = 8;
+    // --- КОНЕЦ ---
+
     private static final int BET_REWARD_GREEN_THRESHOLD = 4;
     private static final int BET_REWARD_RED_THRESHOLD = 8;
     private static final double REWARD_YELLOW_MULT = 1.0;
@@ -55,12 +55,10 @@ public class Main extends Application {
     private static final double REWARD_RED_MULT = 3.0;
     private enum RewardTier { YELLOW, GREEN, RED }
 
-    // --- СПИСКИ КАРТ ---
     private final Map<String, CardData> allCards = new HashMap<>();
     private final List<CardData> creatureTemplates = new ArrayList<>();
     private final List<CardData> influenceDeck = new ArrayList<>();
 
-    // --- СОСТОЯНИЕ (STATE) ---
     private CreatureState creature1State;
     private CreatureState creature2State;
     private enum Player { PLAYER_1, PLAYER_2 }
@@ -73,11 +71,9 @@ public class Main extends Application {
     private int p1_BetsOn_C2 = 0;
     private int p2_BetsOn_C2 = 0;
 
-    // --- (ЗАПРОС 3) ПОСТОЯННАЯ СТАТИСТИКА ---
     private int player1TotalScore = 0;
     private int player2TotalScore = 0;
 
-    // --- UI REFERENCES ---
     private HBox handBox;
     private Text turnPointsText;
     private VBox creature1Pane;
@@ -91,8 +87,13 @@ public class Main extends Application {
     private VBox betRewardScaleUI;
     private HBox betRewardScaleC1Row;
     private HBox betRewardScaleC2Row;
-    private Text player1ScoreText; // (ЗАПРОС 4)
-    private Text player2ScoreText; // (ЗАПРОС 4)
+    private Text player1ScoreText;
+    private Text player2ScoreText;
+
+    // --- (ЗАПРОС 2) UI ШКАЛЫ ЗАЩИТЫ ---
+    private HBox defenseScale1;
+    private HBox defenseScale2;
+    // --- КОНЕЦ ---
 
 
     public static void main(String[] args) {
@@ -129,10 +130,15 @@ public class Main extends Application {
         attackScale1 = createAttackScale();
         attackScale2 = createAttackScale();
 
-        VBox creature1Column = new VBox(5, creature1Pane, creature1BetText, attackScale1);
+        // --- (ЗАПРОС 2) ---
+        defenseScale1 = createDefenseScale();
+        defenseScale2 = createDefenseScale();
+
+        VBox creature1Column = new VBox(5, creature1Pane, creature1BetText, attackScale1, defenseScale1);
         creature1Column.setAlignment(Pos.CENTER);
-        VBox creature2Column = new VBox(5, creature2Pane, creature2BetText, attackScale2);
+        VBox creature2Column = new VBox(5, creature2Pane, creature2BetText, attackScale2, defenseScale2);
         creature2Column.setAlignment(Pos.CENTER);
+        // --- КОНЕЦ (ЗАПРОС 2) ---
 
         centralDropZone1 = createCentralDropZone(creature1State, creature1Pane, 1);
         centralDropZone2 = createCentralDropZone(creature2State, creature2Pane, 2);
@@ -152,7 +158,6 @@ public class Main extends Application {
         bottom.setPadding(new Insets(8));
         bottom.setAlignment(Pos.CENTER);
 
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 4) UI Статистики ---
         Button endTurnBtn = new Button(I18n.getString("button.endTurn"));
         endTurnBtn.setMinWidth(180);
         endTurnBtn.setOnAction(e -> endTurn());
@@ -161,7 +166,7 @@ public class Main extends Application {
         player1ScoreText.getStyleClass().add("score-text");
         player2ScoreText = new Text();
         player2ScoreText.getStyleClass().add("score-text");
-        updatePlayerTotalScores(); // Установить "Общий счет: 0"
+        updatePlayerTotalScores();
 
         Region spacerLeft = new Region();
         HBox.setHgrow(spacerLeft, Priority.ALWAYS);
@@ -170,7 +175,6 @@ public class Main extends Application {
 
         HBox buttonBar = new HBox(10, player1ScoreText, spacerLeft, endTurnBtn, spacerRight, player2ScoreText);
         buttonBar.setAlignment(Pos.CENTER);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         betRewardScaleUI = createBetRewardScale();
 
@@ -223,17 +227,15 @@ public class Main extends Application {
         }
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 5) Логика 3-х боев ---
     private void endTurn() {
         if (currentPlayer == Player.PLAYER_1) {
             currentPlayer = Player.PLAYER_2;
             currentTurnPointsUsed = 0;
             drawCardsToMax(Player.PLAYER_2);
         } else {
-            // Ход 2-го игрока завершен, раунд окончен
             if (currentRound >= MAX_ROUNDS_PER_BATTLE) {
-                startBattle(); // Запускаем бой
-                return; // Выходим, т.к. startBattle сам вызовет restartGame
+                startBattle();
+                return;
             } else {
                 currentRound++;
                 currentPlayer = Player.PLAYER_1;
@@ -245,7 +247,6 @@ public class Main extends Application {
         updateHandDisplay();
         updateAllScales();
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void drawCardsToMax(Player player) {
         List<CardData> currentHand = (player == Player.PLAYER_1) ? player1Hand : player2Hand;
@@ -258,15 +259,13 @@ public class Main extends Application {
         }
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3, 5) Обновлен текст ---
     private void updateTurnPointsText() {
         String playerLabel = (currentPlayer == Player.PLAYER_1) ? I18n.getString("label.player1") : I18n.getString("label.player2");
-        turnPointsText.setText(String.format("Бой %d/%d | Раунд: %d/%d | Ход: %s | Очки: %d/%d",
+        turnPointsText.setText(String.format(I18n.getString("label.turnInfo"),
                 currentBattle, MAX_BATTLES,
                 currentRound, MAX_ROUNDS_PER_BATTLE,
                 playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void updateBetDisplays() {
         int totalOnC1 = p1_BetsOn_C1 + p2_BetsOn_C1;
@@ -275,14 +274,12 @@ public class Main extends Application {
         creature2BetText.setText(String.format(I18n.getString("label.bets"), totalOnC2));
     }
 
-    // --- НОВЫЙ МЕТОД: (ЗАПРОС 4) Обновление UI статистики ---
     private void updatePlayerTotalScores() {
         player1ScoreText.setText(String.format(I18n.getString("label.totalScore"), player1TotalScore));
         player2ScoreText.setText(String.format(I18n.getString("label.totalScore"), player2TotalScore));
     }
-    // --- КОНЕЦ НОВОГО МЕТОДА ---
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Логика боя обновлена ---
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика боя с расчетом защиты ---
     private void startBattle() {
         StringBuilder battleLog = new StringBuilder(I18n.getString("battle.start"));
         CreatureState attacker, defender;
@@ -311,12 +308,23 @@ public class Main extends Application {
 
         while (creature1State.currentHealth > 0 && creature2State.currentHealth > 0) {
             int diceCount = getDiceCount(attacker.currentAttack);
-            int damage = DiceUtils.rollD6(diceCount);
-            defender.currentHealth -= damage;
-            battleLog.append(String.format(I18n.getString("battle.attack"),
-                    attacker.getLocalizedName(), attacker.currentAttack, diceCount, damage));
-            battleLog.append(String.format(I18n.getString("battle.hpRemaining"),
-                    defender.getLocalizedName(), Math.max(0, defender.currentHealth)));
+            int rawDamage = DiceUtils.rollD6(diceCount);
+
+            // --- НОВАЯ ЛОГИКА: (ЗАПРОС 1) Расчет защиты ---
+            int defenderDefense = defender.currentDefense;
+            int damageReduction = getDefenseBlock(defenderDefense);
+            int finalDamage = Math.max(0, rawDamage - damageReduction);
+            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
+            defender.currentHealth -= finalDamage;
+
+            battleLog.append(String.format(I18n.getString("battle.attack.roll"),
+                    attacker.getLocalizedName(), attacker.currentAttack, diceCount, rawDamage));
+            battleLog.append(String.format(I18n.getString("battle.defense.block"),
+                    defender.getLocalizedName(), defenderDefense, damageReduction));
+            battleLog.append(String.format(I18n.getString("battle.defense.result"),
+                    finalDamage, defender.getLocalizedName(), Math.max(0, defender.currentHealth)));
+
             if (defender.currentHealth <= 0) {
                 break;
             }
@@ -342,19 +350,16 @@ public class Main extends Application {
             player2Winnings = (int)(p2_BetsOn_C2 * getRewardMultiplier(winnerTier));
         }
 
-        // (ЗАПРОС 3) Добавляем выигрыш к общему счету
         player1TotalScore += player1Winnings;
         player2TotalScore += player2Winnings;
-        updatePlayerTotalScores(); // Немедленно обновляем UI
+        updatePlayerTotalScores();
 
         battleLog.append("\n").append(String.format(I18n.getString("battle.winner"), winnerName));
 
         showInfo(battleLog.toString());
-        // (ЗАПРОС 1) Вызываем новый диалог
         showEndGameDialog(winnerName, player1Winnings, player2Winnings, winnerTier);
     }
 
-    // --- ИЗМЕНЕНИЕ: Разделение на Tier и Multiplier ---
     private RewardTier getRewardTier(CreatureState betOn, CreatureState opponent) {
         int rpDiff = betOn.currentRatePoints - opponent.currentRatePoints;
 
@@ -380,7 +385,6 @@ public class Main extends Application {
             default: return REWARD_YELLOW_MULT;
         }
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private int getDiceCount(int attack) {
         if (attack <= ATTACK_TIER_1_MAX) {
@@ -392,13 +396,26 @@ public class Main extends Application {
         return 3;
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1, 2, 5) Заменено на диалог Alert ---
+    // --- НОВЫЙ МЕТОД: (ЗАПРОС 1) Расчет блока защиты ---
+    private int getDefenseBlock(int defense) {
+        if (defense <= 0) {
+            return 0;
+        }
+        if (defense <= DEFENSE_TIER_1_MAX) {
+            return 1; // 1-3 защиты
+        }
+        if (defense <= DEFENSE_TIER_2_MAX) {
+            return 2; // 4-8 защиты
+        }
+        return 3; // 9+ защиты
+    }
+    // --- КОНЕЦ НОВОГО МЕТОДА ---
+
     private void showEndGameDialog(String winnerName, int p1Winnings, int p2Winnings, RewardTier tier) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(I18n.getString("game.endTitle"));
         alert.setHeaderText(String.format(I18n.getString("battle.winner"), winnerName));
 
-        // Создаем цветные лейблы для выигрыша
         Label p1Label = new Label(I18n.getString("label.player1") + " " + I18n.getString("game.winnings.simple") + ":");
         Label p1Amount = new Label("" + p1Winnings);
         p1Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
@@ -416,14 +433,11 @@ public class Main extends Application {
         grid.add(p2Amount, 1, 1);
 
         alert.getDialogPane().setContent(grid);
-        alert.getDialogPane().getStylesheets().add(makeCss()); // Применяем CSS к диалогу
+        alert.getDialogPane().getStylesheets().add(makeCss());
 
-        // (ЗАПРОС 1) Ждем нажатия ОК
         alert.showAndWait();
 
-        // (ЗАПРОС 5) Логика 3-х боев
         if (currentBattle >= MAX_BATTLES) {
-            // Матч окончен
             Alert matchOverAlert = new Alert(Alert.AlertType.INFORMATION);
             matchOverAlert.setTitle(I18n.getString("game.matchOver.title"));
             matchOverAlert.setHeaderText(null);
@@ -432,19 +446,16 @@ public class Main extends Application {
             matchOverAlert.getButtonTypes().setAll(new ButtonType(I18n.getString("game.matchOver.newMatch")));
             matchOverAlert.showAndWait();
 
-            // Сброс статистики матча
             player1TotalScore = 0;
             player2TotalScore = 0;
             currentBattle = 1;
             updatePlayerTotalScores();
         } else {
-            // Следующий бой
             currentBattle++;
         }
 
         restartGame();
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void restartGame() {
         currentRound = 1;
@@ -811,6 +822,36 @@ public class Main extends Application {
         }
     }
 
+    // --- НОВЫЙ МЕТОД: (ЗАПРОС 2) Создает UI-шкалу защиты ---
+    private HBox createDefenseScale() {
+        HBox scale = new HBox(5);
+        scale.setAlignment(Pos.CENTER);
+        scale.getStyleClass().add("defense-scale"); // Новый CSS
+
+        Label d1 = new Label(I18n.getString("label.defenseBlock.1"));
+        d1.getStyleClass().add("defense-label");
+        Label d2 = new Label(I18n.getString("label.defenseBlock.2"));
+        d2.getStyleClass().add("defense-label");
+        Label d3 = new Label(I18n.getString("label.defenseBlock.3"));
+        d3.getStyleClass().add("defense-label");
+
+        scale.getChildren().addAll(d1, d2, d3);
+        return scale;
+    }
+    // --- КОНЕЦ НОВОГО МЕТОДА ---
+
+    // --- НОВЫЙ МЕТОД: (ЗАПРОС 2) Обновляет UI-шкалу защиты ---
+    private void updateDefenseScale(HBox scale, int currentDefense) {
+        int blockCount = getDefenseBlock(currentDefense); // 0, 1, 2, or 3
+        for (int i = 0; i < scale.getChildren().size(); i++) {
+            scale.getChildren().get(i).getStyleClass().remove("defense-label-active");
+        }
+        if (blockCount > 0) {
+            scale.getChildren().get(blockCount - 1).getStyleClass().add("defense-label-active");
+        }
+    }
+    // --- КОНЕЦ НОВОГО МЕТОДА ---
+
     private VBox createBetRewardScale() {
         VBox scaleVBox = new VBox(5);
         scaleVBox.setAlignment(Pos.CENTER);
@@ -835,10 +876,8 @@ public class Main extends Application {
 
         Rectangle yellow = new Rectangle(20, 20);
         yellow.getStyleClass().addAll("bet-scale-box", "bet-scale-yellow");
-
         Rectangle green = new Rectangle(20, 20);
         green.getStyleClass().addAll("bet-scale-box", "bet-scale-green");
-
         Rectangle red = new Rectangle(20, 20);
         red.getStyleClass().addAll("bet-scale-box", "bet-scale-red");
 
@@ -879,6 +918,10 @@ public class Main extends Application {
         if (attackScale1 != null) {
             updateAttackScale(attackScale1, creature1State.currentAttack);
             updateAttackScale(attackScale2, creature2State.currentAttack);
+            // (ЗАПРОС 2)
+            updateDefenseScale(defenseScale1, creature1State.currentDefense);
+            updateDefenseScale(defenseScale2, creature2State.currentDefense);
+
             updateBetRewardScale();
         }
     }
@@ -937,6 +980,7 @@ public class Main extends Application {
         return is;
     }
 
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 2) CSS для шкалы защиты ---
     private String makeCss() {
         return """
             data:,
@@ -1051,6 +1095,27 @@ public class Main extends Application {
               -fx-background-color: #E50000;
               -fx-text-fill: white;
             }
+            
+            /* --- НОВЫЕ СТИЛИ (ЗАПРОС 2) --- */
+            .defense-scale {
+              -fx-border-color: #e0e0e0;
+              -fx-border-width: 1px;
+              -fx-border-radius: 5px;
+              -fx-padding: 3px;
+            }
+            .defense-label {
+              -fx-padding: 5px 10px;
+              -fx-font-size: 12px;
+              -fx-font-weight: bold;
+              -fx-background-color: #f0f0f0;
+              -fx-border-radius: 3px;
+              -fx-text-fill: #999999;
+            }
+            .defense-label-active {
+              -fx-background-color: #0078D7; /* Цвет Защиты */
+              -fx-text-fill: white;
+            }
+            /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
             
             .bet-scale-label {
               -fx-font-size: 12px;
