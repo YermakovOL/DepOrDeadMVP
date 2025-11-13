@@ -17,6 +17,7 @@ public class I18n {
         try {
             return messages.getString(key);
         } catch (Exception e) {
+            e.printStackTrace();
             return "!" + key + "!"; // Показать ошибку, если ключ не найден
         }
     }

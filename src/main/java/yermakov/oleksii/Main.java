@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
+import javafx.application.Platform; // Добавлен импорт
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -42,10 +43,11 @@ public class Main extends Application {
 
     private static final int ATTACK_TIER_1_MAX = 6;
     private static final int ATTACK_TIER_2_MAX = 14;
-
-    // --- (ЗАПРОС 1) НОВЫЕ КОНСТАНТЫ ЗАЩИТЫ ---
     private static final int DEFENSE_TIER_1_MAX = 3;
     private static final int DEFENSE_TIER_2_MAX = 8;
+
+    // --- (ЗАПРОС 1) СКОРОСТЬ БОЯ (в секундах) ---
+    private static final double BATTLE_STEP_DELAY = 1.0;
     // --- КОНЕЦ ---
 
     private static final int BET_REWARD_GREEN_THRESHOLD = 4;
@@ -89,11 +91,17 @@ public class Main extends Application {
     private HBox betRewardScaleC2Row;
     private Text player1ScoreText;
     private Text player2ScoreText;
-
-    // --- (ЗАПРОС 2) UI ШКАЛЫ ЗАЩИТЫ ---
     private HBox defenseScale1;
     private HBox defenseScale2;
-    // --- КОНЕЦ ---
+
+    // --- ПОЛЯ ДЛЯ БОЯ ---
+    private ScrollPane battleLogScroll;
+    private VBox battleLogContainer;
+    private CreatureState battleAttacker;
+    private CreatureState battleDefender;
+    private Alert battleDialog;
+    private Text battleC1Stats;
+    private Text battleC2Stats;
 
 
     public static void main(String[] args) {
@@ -129,8 +137,6 @@ public class Main extends Application {
 
         attackScale1 = createAttackScale();
         attackScale2 = createAttackScale();
-
-        // --- (ЗАПРОС 2) ---
         defenseScale1 = createDefenseScale();
         defenseScale2 = createDefenseScale();
 
@@ -138,7 +144,6 @@ public class Main extends Application {
         creature1Column.setAlignment(Pos.CENTER);
         VBox creature2Column = new VBox(5, creature2Pane, creature2BetText, attackScale2, defenseScale2);
         creature2Column.setAlignment(Pos.CENTER);
-        // --- КОНЕЦ (ЗАПРОС 2) ---
 
         centralDropZone1 = createCentralDropZone(creature1State, creature1Pane, 1);
         centralDropZone2 = createCentralDropZone(creature2State, creature2Pane, 2);
@@ -279,72 +284,132 @@ public class Main extends Application {
         player2ScoreText.setText(String.format(I18n.getString("label.totalScore"), player2TotalScore));
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика боя с расчетом защиты ---
+    // --- ИЗМЕНЕНИЕ: Логика боя переписана на автоматическую ---
     private void startBattle() {
-        StringBuilder battleLog = new StringBuilder(I18n.getString("battle.start"));
-        CreatureState attacker, defender;
-
+        // 1. Определяем инициативу
         if (creature1State.currentAttack > creature2State.currentAttack) {
-            attacker = creature1State;
-            defender = creature2State;
-            battleLog.append(String.format(I18n.getString("battle.initiative.attack"), attacker.getLocalizedName(), attacker.currentAttack));
+            battleAttacker = creature1State;
+            battleDefender = creature2State;
         } else if (creature2State.currentAttack > creature1State.currentAttack) {
-            attacker = creature2State;
-            defender = creature1State;
-            battleLog.append(String.format(I18n.getString("battle.initiative.attack"), attacker.getLocalizedName(), attacker.currentAttack));
+            battleAttacker = creature2State;
+            battleDefender = creature1State;
         } else {
-            battleLog.append(I18n.getString("battle.initiative.tie"));
             int roll = DiceUtils.rollD6(1);
             if (roll % 2 == 0) {
-                attacker = creature1State;
-                defender = creature2State;
-                battleLog.append(String.format(I18n.getString("battle.initiative.tie.even"), roll, attacker.getLocalizedName()));
+                battleAttacker = creature1State;
+                battleDefender = creature2State;
             } else {
-                attacker = creature2State;
-                defender = creature1State;
-                battleLog.append(String.format(I18n.getString("battle.initiative.tie.odd"), roll, attacker.getLocalizedName()));
+                battleAttacker = creature2State;
+                battleDefender = creature1State;
             }
         }
 
-        while (creature1State.currentHealth > 0 && creature2State.currentHealth > 0) {
-            int diceCount = getDiceCount(attacker.currentAttack);
-            int rawDamage = DiceUtils.rollD6(diceCount);
+        battleDialog = new Alert(Alert.AlertType.NONE);
+        battleDialog.setTitle(I18n.getString("battle.dialogTitle"));
+        battleDialog.getDialogPane().getStylesheets().add(makeCss());
+        battleDialog.getDialogPane().setPrefWidth(700);
 
-            // --- НОВАЯ ЛОГИКА: (ЗАПРОС 1) Расчет защиты ---
-            int defenderDefense = defender.currentDefense;
-            int damageReduction = getDefenseBlock(defenderDefense);
-            int finalDamage = Math.max(0, rawDamage - damageReduction);
-            // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+        BorderPane battlePane = new BorderPane();
+        battlePane.setPadding(new Insets(10));
 
-            defender.currentHealth -= finalDamage;
+        battleC1Stats = new Text(getCreatureBattleStats(creature1State));
+        battleC1Stats.getStyleClass().add("battle-stat-text");
+        battlePane.setLeft(battleC1Stats);
+        BorderPane.setAlignment(battleC1Stats, Pos.TOP_LEFT);
 
-            battleLog.append(String.format(I18n.getString("battle.attack.roll"),
-                    attacker.getLocalizedName(), attacker.currentAttack, diceCount, rawDamage));
-            battleLog.append(String.format(I18n.getString("battle.defense.block"),
-                    defender.getLocalizedName(), defenderDefense, damageReduction));
-            battleLog.append(String.format(I18n.getString("battle.defense.result"),
-                    finalDamage, defender.getLocalizedName(), Math.max(0, defender.currentHealth)));
+        battleC2Stats = new Text(getCreatureBattleStats(creature2State));
+        battleC2Stats.getStyleClass().add("battle-stat-text");
+        battlePane.setRight(battleC2Stats);
+        BorderPane.setAlignment(battleC2Stats, Pos.TOP_RIGHT);
 
-            if (defender.currentHealth <= 0) {
-                break;
-            }
-            CreatureState temp = attacker;
-            attacker = defender;
-            defender = temp;
+        battleLogContainer = new VBox(5);
+        battleLogContainer.setAlignment(Pos.TOP_CENTER);
+
+        battleLogScroll = new ScrollPane(battleLogContainer);
+        battleLogScroll.setPrefHeight(250);
+        battleLogScroll.setFitToWidth(true);
+        battleLogScroll.getStyleClass().add("battle-log-scroll");
+
+        VBox centerContent = new VBox(10, battleLogScroll);
+        centerContent.setAlignment(Pos.CENTER);
+        battlePane.setCenter(centerContent);
+
+        // 3. Показываем окно и запускаем цепочку анимаций
+        addBattleLog(I18n.getString("battle.start"));
+        if (creature1State.currentAttack == creature2State.currentAttack) {
+            addBattleLog(I18n.getString("battle.initiative.tie"));
+            addBattleLog(String.format(I18n.getString("battle.initiative.tie.even").contains("Четное") ?
+                    (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")) :
+                    (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")),
+                    0, battleAttacker.getLocalizedName()));
+        } else {
+            addBattleLog(String.format(I18n.getString("battle.initiative.attack"), battleAttacker.getLocalizedName(), battleAttacker.currentAttack));
         }
 
-        String winnerName;
+        battleDialog.getDialogPane().setContent(battlePane);
+
+        PauseTransition startDelay = new PauseTransition(Duration.seconds(1.0));
+        startDelay.setOnFinished(e -> playBattleStep());
+        startDelay.play();
+
+        battleDialog.show();
+    }
+
+    private void playBattleStep() {
+        int diceCount = getDiceCount(battleAttacker.currentAttack);
+        int rawDamage = DiceUtils.rollD6(diceCount);
+        int defenderDefense = battleDefender.currentDefense;
+        int damageReduction = getDefenseBlock(defenderDefense);
+        int finalDamage = Math.max(0, rawDamage - damageReduction);
+
+        battleDefender.currentHealth -= finalDamage;
+
+        addBattleLog("---");
+        addBattleLog(String.format(I18n.getString("battle.attack.roll"),
+                battleAttacker.getLocalizedName(), battleAttacker.currentAttack, diceCount, rawDamage));
+        addBattleLog(String.format(I18n.getString("battle.defense.block"),
+                battleDefender.getLocalizedName(), defenderDefense, damageReduction));
+
+        addBattleLog(String.format(I18n.getString("battle.defense.result"),
+                finalDamage, battleDefender.getLocalizedName(), Math.max(0, battleDefender.currentHealth)));
+
+        battleC1Stats.setText(getCreatureBattleStats(creature1State));
+        battleC2Stats.setText(getCreatureBattleStats(creature2State));
+
+        if (battleDefender.currentHealth <= 0) {
+            PauseTransition endDelay = new PauseTransition(Duration.seconds(1.5));
+            endDelay.setOnFinished(e -> {
+                // --- ИСПРАВЛЕНИЕ: Закрываем и используем runLater ---
+                battleDialog.setResult(ButtonType.CLOSE);
+                battleDialog.close();
+                Platform.runLater(() -> processBattleResults(battleAttacker));
+                // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+            });
+            endDelay.play();
+            return;
+        }
+
+        CreatureState temp = battleAttacker;
+        battleAttacker = battleDefender;
+        battleDefender = temp;
+
+        // --- ИСПОЛЬЗОВАНИЕ КОНСТАНТЫ BATTLE_STEP_DELAY ---
+        PauseTransition stepDelay = new PauseTransition(Duration.seconds(BATTLE_STEP_DELAY));
+        stepDelay.setOnFinished(e -> playBattleStep());
+        stepDelay.play();
+    }
+
+    private void processBattleResults(CreatureState winner) {
+        String winnerName = winner.getLocalizedName();
         int player1Winnings;
         int player2Winnings;
         RewardTier winnerTier;
 
-        if (creature1State.currentHealth > 0) {
-            winnerName = creature1State.getLocalizedName();
+        if (winner == creature1State) {
             winnerTier = getRewardTier(creature1State, creature2State);
             player1Winnings = (int)(p1_BetsOn_C1 * getRewardMultiplier(winnerTier));
             player2Winnings = (int)(p2_BetsOn_C1 * getRewardMultiplier(winnerTier));
         } else {
-            winnerName = creature2State.getLocalizedName();
             winnerTier = getRewardTier(creature2State, creature1State);
             player1Winnings = (int)(p1_BetsOn_C2 * getRewardMultiplier(winnerTier));
             player2Winnings = (int)(p2_BetsOn_C2 * getRewardMultiplier(winnerTier));
@@ -354,15 +419,31 @@ public class Main extends Application {
         player2TotalScore += player2Winnings;
         updatePlayerTotalScores();
 
-        battleLog.append("\n").append(String.format(I18n.getString("battle.winner"), winnerName));
-
-        showInfo(battleLog.toString());
         showEndGameDialog(winnerName, player1Winnings, player2Winnings, winnerTier);
+    }
+
+    private void addBattleLog(String message) {
+        Text text = new Text(message);
+        text.getStyleClass().add("battle-log-text");
+        battleLogContainer.getChildren().add(text);
+
+        if (battleLogScroll != null) {
+            battleLogScroll.setVvalue(1.0);
+        }
+    }
+
+    private String getCreatureBattleStats(CreatureState state) {
+        return String.format(I18n.getString("battle.statsHeader"), state.getLocalizedName(), state.currentHealth) +
+               "\n" +
+               String.format(" ATK: %d (%s)", state.currentAttack, I18n.getString("label.diceLabel." + getDiceCount(state.currentAttack))) +
+               "\n" +
+               String.format(" DEF: %d (%s)", state.currentDefense, I18n.getString("label.defenseBlock." + getDefenseBlock(state.currentDefense))) +
+               "\n" +
+               String.format(" RP: %d", state.currentRatePoints);
     }
 
     private RewardTier getRewardTier(CreatureState betOn, CreatureState opponent) {
         int rpDiff = betOn.currentRatePoints - opponent.currentRatePoints;
-
         if (rpDiff > 0) {
             return RewardTier.YELLOW;
         } else {
@@ -396,20 +477,18 @@ public class Main extends Application {
         return 3;
     }
 
-    // --- НОВЫЙ МЕТОД: (ЗАПРОС 1) Расчет блока защиты ---
     private int getDefenseBlock(int defense) {
         if (defense <= 0) {
             return 0;
         }
         if (defense <= DEFENSE_TIER_1_MAX) {
-            return 1; // 1-3 защиты
+            return 1;
         }
         if (defense <= DEFENSE_TIER_2_MAX) {
-            return 2; // 4-8 защиты
+            return 2;
         }
-        return 3; // 9+ защиты
+        return 3;
     }
-    // --- КОНЕЦ НОВОГО МЕТОДА ---
 
     private void showEndGameDialog(String winnerName, int p1Winnings, int p2Winnings, RewardTier tier) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -465,15 +544,13 @@ public class Main extends Application {
         p2_BetsOn_C2 = 0;
         updateBetDisplays();
 
-        startGame(); // Создает новые creature1State / creature2State
+        startGame();
 
-        // Обновляем данные в панелях
         creature1Pane.setUserData(creature1State);
         creature2Pane.setUserData(creature2State);
 
-        // --- ИСПРАВЛЕНИЕ (БАГ 2): Пересоздаем стопки с новыми ссылками ---
-        updateCentralDropZonesReferences();
-        // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+        clearDropZone(centralDropZone1);
+        clearDropZone(centralDropZone2);
 
         refreshCreaturePane(creature1Pane, creature1State);
         refreshCreaturePane(creature2Pane, creature2State);
@@ -587,12 +664,15 @@ public class Main extends Application {
                     removeCardFromHandById(cardId);
 
                     if ("buff".equals(mode)) {
+                        // Получаем актуальный state из панели
+                        CreatureState currentState = (CreatureState) targetPane.getUserData();
                         if (cd.effects != null) {
                             for (Effect effect : cd.effects) {
-                                PatchUtils.applyEffect(targetState, effect);
+                                PatchUtils.applyEffect(currentState, effect);
                             }
                         }
-                        refreshCreaturePane(targetPane, targetState);
+                        refreshCreaturePane(targetPane, currentState);
+
                         VBox small = createCardNode(cd, false, null);
                         small.setPrefSize(200, 36);
                         small.setMinSize(200, 36);
@@ -706,7 +786,7 @@ public class Main extends Application {
         box.setPadding(new Insets(8)); // Чуть больше отступ
 
         Text name = new Text(data.getLocalizedName());
-        name.getStyleClass().add("card-title"); // Увеличим шрифт в CSS
+        name.getStyleClass().add("card-title");
 
         VBox buffView = new VBox(4);
         buffView.setPadding(new Insets(2, 0, 0, 0));
@@ -866,11 +946,9 @@ public class Main extends Application {
         scale.getChildren().addAll(d1, d2, d3);
         return scale;
     }
-    // --- КОНЕЦ НОВОГО МЕТОДА ---
 
-    // --- НОВЫЙ МЕТОД: (ЗАПРОС 2) Обновляет UI-шкалу защиты ---
     private void updateDefenseScale(HBox scale, int currentDefense) {
-        int blockCount = getDefenseBlock(currentDefense); // 0, 1, 2, or 3
+        int blockCount = getDefenseBlock(currentDefense);
         for (int i = 0; i < scale.getChildren().size(); i++) {
             scale.getChildren().get(i).getStyleClass().remove("defense-label-active");
         }
@@ -878,7 +956,6 @@ public class Main extends Application {
             scale.getChildren().get(blockCount - 1).getStyleClass().add("defense-label-active");
         }
     }
-    // --- КОНЕЦ НОВОГО МЕТОДА ---
 
     private VBox createBetRewardScale() {
         VBox scaleVBox = new VBox(5);
@@ -946,10 +1023,8 @@ public class Main extends Application {
         if (attackScale1 != null) {
             updateAttackScale(attackScale1, creature1State.currentAttack);
             updateAttackScale(attackScale2, creature2State.currentAttack);
-            // (ЗАПРОС 2)
             updateDefenseScale(defenseScale1, creature1State.currentDefense);
             updateDefenseScale(defenseScale2, creature2State.currentDefense);
-
             updateBetRewardScale();
         }
     }
@@ -1032,7 +1107,7 @@ public class Main extends Application {
             }
             .card-title {
               -fx-font-weight: bold;
-              -fx-font-size: 16px;
+              -fx-font-size: 16px; /* Было 14 */
             }
             .card-cost {
               -fx-font-size: 13px;
@@ -1185,6 +1260,11 @@ public class Main extends Application {
                 -fx-background-color: transparent;
                 -fx-background-insets: 0;
                 -fx-padding: 0;
+            }
+            .battle-log-text {
+                -fx-font-size: 16px;
+                -fx-font-weight: bold;
+                -fx-fill: #222222;
             }
             """;
     }
