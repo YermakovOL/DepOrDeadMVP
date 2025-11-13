@@ -465,13 +465,15 @@ public class Main extends Application {
         p2_BetsOn_C2 = 0;
         updateBetDisplays();
 
-        startGame();
+        startGame(); // Создает новые creature1State / creature2State
 
+        // Обновляем данные в панелях
         creature1Pane.setUserData(creature1State);
         creature2Pane.setUserData(creature2State);
 
-        clearDropZone(centralDropZone1);
-        clearDropZone(centralDropZone2);
+        // --- ИСПРАВЛЕНИЕ (БАГ 2): Пересоздаем стопки с новыми ссылками ---
+        updateCentralDropZonesReferences();
+        // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
         refreshCreaturePane(creature1Pane, creature1State);
         refreshCreaturePane(creature2Pane, creature2State);
@@ -479,6 +481,24 @@ public class Main extends Application {
         updateHandDisplay();
         updateTurnPointsText();
         updateAllScales();
+    }
+
+    // --- НОВЫЙ МЕТОД: Обновляет ссылки в центральных стопках после рестарта ---
+    private void updateCentralDropZonesReferences() {
+        // Нам нужно полностью пересоздать поведение стопок с НОВЫМИ state и pane
+
+        // Удаляем старые стопки из UI
+        HBox centerBox = (HBox) creature1Pane.getParent();
+        centerBox.getChildren().remove(centralDropZone1);
+        centerBox.getChildren().remove(centralDropZone2);
+
+        // Создаем новые стопки с новыми ссылками
+        centralDropZone1 = createCentralDropZone(creature1State, creature1Pane, 1);
+        centralDropZone2 = createCentralDropZone(creature2State, creature2Pane, 2);
+
+        // Вставляем их обратно в нужное место (индексы 1 и 2)
+        centerBox.getChildren().add(1, centralDropZone1);
+        centerBox.getChildren().add(2, centralDropZone2);
     }
 
     private void clearDropZone(VBox dropZone) {
@@ -683,19 +703,29 @@ public class Main extends Application {
     private VBox createHandCardNode(CardData data) {
         VBox box = new VBox(4);
         box.getStyleClass().add("card");
-        box.setPadding(new Insets(6));
+        box.setPadding(new Insets(8)); // Чуть больше отступ
 
         Text name = new Text(data.getLocalizedName());
-        name.getStyleClass().add("card-title");
+        name.getStyleClass().add("card-title"); // Увеличим шрифт в CSS
 
         VBox buffView = new VBox(4);
         buffView.setPadding(new Insets(2, 0, 0, 0));
 
+        // --- ИЗМЕНЕНИЕ: Всегда показываем ставку внизу ---
+        // Создаем контейнер для нижней части (цена и ставка)
+        BorderPane footer = new BorderPane();
+
         if (data.cost > 0) {
             Text costText = new Text(String.format(I18n.getString("label.cost"), data.cost));
             costText.getStyleClass().add("card-cost");
-            buffView.getChildren().add(costText);
+            footer.setLeft(costText);
         }
+
+        // Маленькая плашка со ставкой
+        Text betHint = new Text("$" + data.betAmount);
+        betHint.getStyleClass().add("card-bet-hint"); // Новый стиль
+        footer.setRight(betHint);
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         HBox statsBox = new HBox(8);
         addStatChangeText(statsBox, "HP", data.getStatChange("/health"), "hp");
@@ -708,31 +738,30 @@ public class Main extends Application {
         }
 
         Text desc = new Text(data.getLocalizedText());
-        desc.getStyleClass().add("card-text");
-        desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
+        desc.getStyleClass().add("card-text"); // Увеличим шрифт в CSS
+        desc.wrappingWidthProperty().bind(box.widthProperty().subtract(16));
         buffView.getChildren().add(desc);
 
+        // --- РЕЖИМ СТАВКИ (БОЛЬШОЙ) ---
         VBox betView = new VBox(4);
         betView.setAlignment(Pos.CENTER);
-
         Text betLabel = new Text(I18n.getString("label.bet"));
         betLabel.getStyleClass().add("card-cost");
-
         Text betAmountText = new Text(String.format(I18n.getString("label.betAmount"), data.betAmount));
         betAmountText.getStyleClass().add("bet-amount-text");
-
         betView.getChildren().addAll(betLabel, betAmountText);
 
         betView.setVisible(false);
         betView.setManaged(false);
 
-        box.getChildren().addAll(name, buffView, betView);
+        // Добавляем footer в конец
+        box.getChildren().addAll(name, buffView, betView, new Region(), footer);
+        VBox.setVgrow(footer, Priority.ALWAYS); // Прижимаем footer к низу
 
         box.getProperties().put("isBet", false);
         box.setOnMouseClicked(ev -> {
             boolean isBet = (boolean) box.getProperties().get("isBet");
             box.getProperties().put("isBet", !isBet);
-
             buffView.setVisible(isBet);
             buffView.setManaged(isBet);
             betView.setVisible(!isBet);
@@ -742,7 +771,6 @@ public class Main extends Application {
         box.setOnDragDetected(ev -> {
             boolean isBet = (boolean) box.getProperties().get("isBet");
             String mode = isBet ? "bet" : "buff";
-
             Dragboard db = box.startDragAndDrop(TransferMode.MOVE);
             ClipboardContent content = new ClipboardContent();
             content.putString(data.id + ";" + mode);
@@ -928,7 +956,13 @@ public class Main extends Application {
 
     private void removeCardFromHandById(String cardId) {
         List<CardData> currentHand = (currentPlayer == Player.PLAYER_1) ? player1Hand : player2Hand;
-        currentHand.removeIf(card -> card.id.equals(cardId));
+
+        for (int i = 0; i < currentHand.size(); i++) {
+            if (currentHand.get(i).id.equals(cardId)) {
+                currentHand.remove(i);
+                return;
+            }
+        }
     }
 
     private void showInfo(String text) {
@@ -989,7 +1023,7 @@ public class Main extends Application {
               -fx-border-color: #cbd7ff;
               -fx-border-radius: 10;
               -fx-background-radius: 10;
-              -fx-padding: 8;
+              -fx-padding: 10; /* Больше отступ */
               -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.06), 6, 0, 0, 2);
             }
             .creature-pane-hover {
@@ -998,15 +1032,19 @@ public class Main extends Application {
             }
             .card-title {
               -fx-font-weight: bold;
-              -fx-font-size: 14px;
+              -fx-font-size: 16px;
             }
             .card-cost {
-              -fx-font-size: 11px;
+              -fx-font-size: 13px;
               -fx-fill: #0066cc;
               -fx-font-weight: bold;
               -fx-padding: 2 0 0 0;
             }
-            
+            .card-bet-hint {
+              -fx-font-size: 13px;
+              -fx-fill: #008800;
+              -fx-font-weight: bold;
+            }
             .bet-amount-text {
               -fx-font-size: 32px;
               -fx-font-weight: bold;
@@ -1037,7 +1075,7 @@ public class Main extends Application {
             .card-stat-atk-pos, .card-stat-atk-neg,
             .card-stat-def-pos, .card-stat-def-neg,
             .card-stat-rp-pos, .card-stat-rp-neg {
-              -fx-font-size: 11px;
+              -fx-font-size: 14px;
               -fx-font-weight: bold;
             }
             .card-stat-hp-pos  { -fx-fill: #00A800; }
@@ -1056,7 +1094,7 @@ public class Main extends Application {
               -fx-padding: 2 0 0 0;
             }
             .card-text {
-              -fx-font-size: 12px;
+              -fx-font-size: 14px;
               -fx-fill: #333333;
               -fx-font-style: italic;
             }
@@ -1096,7 +1134,6 @@ public class Main extends Application {
               -fx-text-fill: white;
             }
             
-            /* --- НОВЫЕ СТИЛИ (ЗАПРОС 2) --- */
             .defense-scale {
               -fx-border-color: #e0e0e0;
               -fx-border-width: 1px;
@@ -1112,10 +1149,9 @@ public class Main extends Application {
               -fx-text-fill: #999999;
             }
             .defense-label-active {
-              -fx-background-color: #0078D7; /* Цвет Защиты */
+              -fx-background-color: #0078D7;
               -fx-text-fill: white;
             }
-            /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
             
             .bet-scale-label {
               -fx-font-size: 12px;
@@ -1139,6 +1175,17 @@ public class Main extends Application {
             .reward-yellow { -fx-fill: #FFA500; -fx-font-weight: bold; -fx-font-size: 14px; }
             .reward-green  { -fx-fill: #00A800; -fx-font-weight: bold; -fx-font-size: 14px; }
             .reward-red    { -fx-fill: #E50000; -fx-font-weight: bold; -fx-font-size: 14px; }
+            
+            .battle-stat-text {
+              -fx-font-family: 'Consolas', 'Monospaced';
+              -fx-font-size: 13px;
+              -fx-line-spacing: 5px;
+            }
+            .battle-log-scroll {
+                -fx-background-color: transparent;
+                -fx-background-insets: 0;
+                -fx-padding: 0;
+            }
             """;
     }
 
