@@ -24,15 +24,12 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
-// --- НОВЫЕ ИМПОРТЫ ДЛЯ РАБОТЫ С ФАЙЛАМИ ---
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-// --- КОНЕЦ НОВЫХ ИМПОРТОВ ---
-
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -68,15 +65,17 @@ public class Main extends Application {
 
     private CreatureState creature1State;
     private CreatureState creature2State;
-    private enum Player { PLAYER_1, PLAYER_2 }
-    private Player currentPlayer;
+    public enum Player { PLAYER_1, PLAYER_2 }
+    public Player currentPlayer; // Сделано public для PatchUtils
     private final List<CardData> player1Hand = new ArrayList<>();
     private final List<CardData> player2Hand = new ArrayList<>();
     private int currentTurnPointsUsed = 0;
-    private int p1_BetsOn_C1 = 0;
-    private int p2_BetsOn_C1 = 0;
-    private int p1_BetsOn_C2 = 0;
-    private int p2_BetsOn_C2 = 0;
+
+    // Сделано public для PatchUtils
+    public int p1_BetsOn_C1 = 0;
+    public int p2_BetsOn_C1 = 0;
+    public int p1_BetsOn_C2 = 0;
+    public int p2_BetsOn_C2 = 0;
 
     private int player1TotalScore = 0;
     private int player2TotalScore = 0;
@@ -107,7 +106,6 @@ public class Main extends Application {
     private Text battleC2Stats;
     private Button battleButton;
 
-    // --- НОВОЕ ПОЛЕ: Путь к внешним файлам данных ---
     private static Path externalDataPath;
 
 
@@ -121,13 +119,8 @@ public class Main extends Application {
         I18n.setLocale(args.isEmpty() ? "ru" : args.get(0));
 
         try {
-            // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Определяем путь и загружаем данные ---
-            // Узнаем, где находится .jar или .exe
             externalDataPath = Path.of(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getParent();
-
-            loadDataWithJackson(); // Этот метод теперь проверяет и копирует файлы
-            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
-
+            loadDataWithJackson();
         } catch (Exception e) {
             e.printStackTrace();
             showError(I18n.getString("error.critical"), String.format(I18n.getString("error.dataLoad"), e.getMessage()));
@@ -291,7 +284,7 @@ public class Main extends Application {
                 playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
     }
 
-    private void updateBetDisplays() {
+    public void updateBetDisplays() {
         int totalOnC1 = p1_BetsOn_C1 + p2_BetsOn_C1;
         int totalOnC2 = p1_BetsOn_C2 + p2_BetsOn_C2;
         creature1BetText.setText(String.format(I18n.getString("label.bets"), totalOnC1));
@@ -450,7 +443,9 @@ public class Main extends Application {
     }
 
     private String getCreatureBattleStats(CreatureState state) {
-        return String.format(I18n.getString("battle.statsHeader"), state.getLocalizedName(), state.currentHealth) +
+        // Убедимся, что HP не отображается как отрицательное в бою
+        int displayHealth = Math.max(0, state.currentHealth);
+        return String.format(I18n.getString("battle.statsHeader"), state.getLocalizedName(), displayHealth) +
                 "\n" +
                 String.format(" ATK: %d (%s)", state.currentAttack, I18n.getString("label.diceLabel." + getDiceCount(state.currentAttack))) +
                 "\n" +
@@ -521,7 +516,7 @@ public class Main extends Application {
             Label p2Amount = new Label("" + p2Winnings);
             p2Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
 
-            GridPane grid = new GridPane();
+                    GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(10);
             grid.add(p1Label, 0, 0);
@@ -623,6 +618,7 @@ public class Main extends Application {
         return creatureCardPane;
     }
 
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика стоимости 1 ОД ---
     private VBox createCentralDropZone(VBox targetPane, int targetBetId) {
         VBox dropArea = new VBox(4);
         dropArea.setPrefSize(220, 180);
@@ -659,8 +655,12 @@ public class Main extends Application {
                 CardData cd = allCards.get(cardId);
                 if (cd == null) return;
 
-                if (currentTurnPointsUsed + cd.cost <= MAX_TURN_POINTS) {
-                    currentTurnPointsUsed += cd.cost;
+                // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) ---
+                int costToPlay = "bet".equals(mode) ? 1 : cd.cost;
+                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
+                if (currentTurnPointsUsed + costToPlay <= MAX_TURN_POINTS) {
+                    currentTurnPointsUsed += costToPlay;
                     updateTurnPointsText();
                     removeCardFromHandById(cardId);
 
@@ -668,7 +668,8 @@ public class Main extends Application {
                         CreatureState currentState = (CreatureState) targetPane.getUserData();
                         if (cd.effects != null) {
                             for (Effect effect : cd.effects) {
-                                PatchUtils.applyEffect(currentState, effect);
+                                // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Передаем 'this' (Main) ---
+                                PatchUtils.applyEffect(this, currentState, effect, targetBetId);
                             }
                         }
                         refreshCreaturePane(targetPane, currentState);
@@ -711,7 +712,7 @@ public class Main extends Application {
                     updateAllScales();
                 } else {
                     showInfo(String.format(I18n.getString("error.notEnoughPoints"),
-                            cd.cost,
+                            costToPlay, // Показываем реальную стоимость
                             (MAX_TURN_POINTS - currentTurnPointsUsed)
                     ));
                 }
@@ -741,6 +742,12 @@ public class Main extends Application {
                     if (def != 0) effectStrings.add(String.format(I18n.getString("info.effect.def"), (def > 0 ? "+" : ""), def));
                     int rp = cd.getStatChange("/ratePoints");
                     if (rp != 0) effectStrings.add(String.format(I18n.getString("info.effect.rp"), (rp > 0 ? "+" : ""), rp));
+
+                    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Показ нового эффекта ---
+                    int betDec = cd.getStatChange("/opponent_bets");
+                    if (betDec > 0) effectStrings.add(String.format(I18n.getString("info.effect.betDec"), betDec));
+                    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
                     if (cd.betAmount > 0) {
                         effectStrings.add(String.format(I18n.getString("info.effect.bet"), cd.betAmount));
                     }
@@ -765,6 +772,7 @@ public class Main extends Application {
 
         Text name = new Text(state.getLocalizedName());
         name.getStyleClass().add("card-title");
+        name.wrappingWidthProperty().bind(creaturePane.widthProperty().subtract(16));
 
         String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
                 state.currentHealth, state.baseHealth,
@@ -798,6 +806,10 @@ public class Main extends Application {
         addStatChangeText(statsBox, "ATK", data.getStatChange("/attack"), "atk");
         addStatChangeText(statsBox, "DEF", data.getStatChange("/defense"), "def");
         addStatChangeText(statsBox, "RP", data.getStatChange("/ratePoints"), "rp");
+
+        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Показ нового эффекта ---
+        addStatChangeText(statsBox, "BET-", data.getStatChange("/opponent_bets"), "bet-dec");
+        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         if (!statsBox.getChildren().isEmpty()) {
             buffView.getChildren().add(statsBox);
@@ -1180,7 +1192,8 @@ public class Main extends Application {
             .card-stat-hp-pos, .card-stat-hp-neg,
             .card-stat-atk-pos, .card-stat-atk-neg,
             .card-stat-def-pos, .card-stat-def-neg,
-            .card-stat-rp-pos, .card-stat-rp-neg {
+            .card-stat-rp-pos, .card-stat-rp-neg,
+            .card-stat-bet-dec-pos, .card-stat-bet-dec-neg {
               -fx-font-size: 13px;
               -fx-font-weight: bold;
             }
@@ -1192,6 +1205,8 @@ public class Main extends Application {
             .card-stat-def-neg { -fx-fill: #000080; }
             .card-stat-rp-pos  { -fx-fill: #FFA500; }
             .card-stat-rp-neg  { -fx-fill: #8B4513; }
+            .card-stat-bet-dec-pos { -fx-fill: #8A2BE2; }
+            .card-stat-bet-dec-neg { -fx-fill: #8A2BE2; }
             
             .card-stats {
               -fx-font-size: 14px;
@@ -1334,7 +1349,7 @@ public class Main extends Application {
             }
             int total = 0;
             for (Effect e : effects) {
-                if (path.equals(e.path)) {
+                if (path.equals(e.path) && e.value != null) {
                     total += e.value;
                 }
             }
@@ -1353,7 +1368,7 @@ public class Main extends Application {
     public static class Effect {
         public String op;
         public String path;
-        public int value;
+        public Integer value; // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) int -> Integer
         public Effect() {}
     }
 
