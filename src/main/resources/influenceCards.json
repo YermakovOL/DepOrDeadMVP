@@ -1,69 +1,295 @@
 [
-  {"id":"i1","name":{"ru":"Подкупленный кузнец","en":"Bribed Smith"},"text":{"ru":"'Укрепил' пару пластин.","en":"'Reinforced' a few plates."},"cost":1,"betAmount":50,
-    "effects": [{"op":"inc","path":"/attack","value":1},{"op":"inc","path":"/defense","value":1},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i2","name":{"ru":"Наводка от тренера","en":"Tip from the Trainer"},"text":{"ru":"Бить в левое колено.","en":"Aim for the left knee."},"cost":1,"betAmount":100,
-    "effects": [{"op":"inc","path":"/attack","value":2},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i3","name":{"ru":"Специальная 'диета'","en":"Special 'Diet'"},"text":{"ru":"Особый мясной пирог.","en":"A special meat pie."},"cost":1,"betAmount":100,
-    "effects": [{"op":"inc","path":"/attack","value":2},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i5","name":{"ru":"Стимуляторы","en":"Stimulants"},"text":{"ru":"Сердце бьется как бешеное.","en":"The heart is pounding like crazy."},"cost":2,"betAmount":150,
-    "effects": [{"op":"inc","path":"/attack","value":3},{"op":"inc","path":"/ratePoints","value":2}]},
-  {"id":"i6","name":{"ru":"Гнев толпы","en":"Rage of the Crowd"},"text":{"ru":"Он в ярости от их криков!","en":"He is furious from their shouts!"},"cost":3,"betAmount":200,
-    "effects": [{"op":"inc","path":"/attack","value":3},{"op":"inc","path":"/health","value":5},{"op":"inc","path":"/ratePoints","value":3}]},
-  {"id":"i8","name":{"ru":"Тупое оружие","en":"Dulled Weapon"},"text":{"ru":"Оружейник 'случайно' забыл его наточить.","en":"The smith 'forgot' to sharpen it."},"cost":1,"betAmount":50,
-    "effects": [{"op":"inc","path":"/attack","value":-1},{"op":"inc","path":"/ratePoints","value":-1}]},
-  {"id":"i9","name":{"ru":"Старая травма","en":"Old Injury"},"text":{"ru":"Друг' в раздевалке нажал, куда надо.","en":"A 'friend' in the locker room pressed right spot."},"cost":2,"betAmount":150,
-    "effects": [{"op":"inc","path":"/attack","value":-2},{"op":"inc","path":"/ratePoints","value":-2}]},
-  {"id":"i12","name":{"ru":"Тяжелая обувь","en":"Heavy Boots"},"text":{"ru":"Кто-то подменил его сапоги.","en":"Someone replaced his boots."},"cost":2,"betAmount":150,
-    "effects": [{"op":"inc","path":"/attack","value":-3},{"op":"inc","path":"/ratePoints","value":-2}]},
-  {"id":"i14","name":{"ru":"Улучшенные ремни","en":"Better Straps"},"text":{"ru":"Доспех сидит как влитой.","en":"The armor fits like a glove."},"cost":1,"betAmount":50,
-    "effects": [{"op":"inc","path":"/defense","value":2},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i15","name":{"ru":"Дополнительная пластина","en":"Extra Plate"},"text":{"ru":"Незаметно вшита под тунику.","en":"Discreetly sewn under the tunic."},"cost":1,"betAmount":50,
-    "effects": [{"op":"inc","path":"/defense","value":2},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i16","name":{"ru":"Качественная сталь","en":"Quality Steel"},"text":{"ru":"Эта броня не подделка.","en":"This armor is not a fake."},"cost":2,"betAmount":150,
-    "effects": [{"op":"inc","path":"/defense","value":4},{"op":"inc","path":"/ratePoints","value":2}]},
-  {"id":"i18","name":{"ru":"Кислота на ремни","en":"Acid on Straps"},"text":{"ru":"Оно продержится... наверное.","en":"It will hold... probably."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/defense","value":-2},{"op":"inc","path":"/ratePoints","value":-2}]},
-  {"id":"i19","name":{"ru":"Подпиленный доспех","en":"Sawed Armor"},"text":{"ru":"Треснет от первого же удара.","en":"Will crack on the first hit."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/defense","value":-3},{"op":"inc","path":"/ratePoints","value":-2}]},
-  {"id":"i20","name":{"ru":"Сытный обед","en":"Hearty Meal"},"text":{"ru":"Хорошо поел - хорошо дерется.","en":"A good meal means a good fight."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/health","value":10},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i21","name":{"ru":"Безрассудство","en":"Recklessness"},"text":{"ru":"Ему обещали двойную плату, если он 'атакует'.","en":"He was promised double pay to 'charge'."},"cost":2,"betAmount":150,
-    "effects": [{"op":"inc","path":"/attack","value":3},{"op":"inc","path":"/defense","value":-2},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i22","name":{"ru":"Черепашья тактика","en":"Turtle Tactics"},"text":{"ru":"Ему приказали 'не рисковать'.","en":"He was ordered to 'play it safe'."},"cost":2,"betAmount":150,
-    "effects": [{"op":"inc","path":"/attack","value":-1},{"op":"inc","path":"/defense","value":3},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i23","name":{"ru":"Распустить слухи","en":"Spread Rumors"},"text":{"ru":"Говорят, он непобедим.","en":"They say he is unbeatable."},"cost":1,"betAmount":200,
-    "effects": [{"op":"inc","path":"/ratePoints","value":3}]},
-  {"id":"i24","name":{"ru":"Угрозы в раздевалке","en":"Locker Room Threats"},"text":{"ru":"Мы знаем, где живет твоя семья'.","en":"'We know where your family lives'."},"cost":1,"betAmount":200,
-    "effects": [{"op":"inc","path":"/ratePoints","value":-3}]},
-  {"id":"i25","name":{"ru":"Плохая вода","en":"Tainted Water"},"text":{"ru":"Что-то живот крутит...","en":"My stomach feels... funny."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/attack","value":-1},{"op":"inc","path":"/defense","value":-1},{"op":"inc","path":"/ratePoints","value":-2}]},
-  {"id":"i26","name":{"ru":"Благословение жреца","en":"Priest's Blessing"},"text":{"ru":"Боги на его стороне. (За деньги).","en":"The gods are on his side. (For money)."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/health","value":5},{"op":"inc","path":"/defense","value":1},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i27","name":{"ru":"Медосмотр","en":"Medical Check-up"},"text":{"ru":"Врач сказал, что он в отличной форме.","en":"The doctor said he's in great shape."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/health","value":6},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i28","name":{"ru":"Целебный эликсир","en":"Healing Elixir"},"text":{"ru":"Глоток... и он как новенький.","en":"One sip... and he's good as new."},"cost":3,"betAmount":150,
-    "effects": [{"op":"inc","path":"/health","value":10},{"op":"inc","path":"/ratePoints","value":2}]},
-  {"id":"i29","name":{"ru":"Указать на слабость","en":"Point Out Weakness"},"text":{"ru":"Его левая нога медленнее!","en":"His left leg is slower!"},"cost":1,"betAmount":100,
-    "effects": [{"op":"inc","path":"/attack","value":2},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i30","name":{"ru":"Облить доспех кислотой","en":"Acid on Armor"},"text":{"ru":"Эта дрянь разъедает металл.","en":"This stuff eats through metal."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/defense","value":-2},{"op":"inc","path":"/ratePoints","value":-2}]},
-  {"id":"i31","name":{"ru":"Повредить сустав","en":"Damage the Joint"},"text":{"ru":"Незаметный удар по локтю перед боем.","en":"A subtle blow to the elbow before the fight."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/attack","value":-2},{"op":"inc","path":"/ratePoints","value":-2}]},
-  {"id":"i32","name":{"ru":"Священный ритуал","en":"Sacred Ritual"},"text":{"ru":"Жрец провел ритуал... за отдельную плату.","en":"The priest performed a ritual... for a fee."},"cost":3,"betAmount":200,
-    "effects": [{"op":"inc","path":"/health","value":6},{"op":"inc","path":"/attack","value":2},{"op":"inc","path":"/ratePoints","value":3}]},
-  {"id":"i33","name":{"ru":"Испортить оружие","en":"Sabotage Weapon"},"text":{"ru":"Слегка надпилить рукоять.","en":"Slightly saw the hilt."},"cost":1,"betAmount":50,
-    "effects": [{"op":"inc","path":"/attack","value":-1},{"op":"inc","path":"/ratePoints","value":-1}]},
-  {"id":"i34","name":{"ru":"Каменная кожа","en":"Stone Skin"},"text":{"ru":"Его кожа стала тверже.","en":"His skin became tougher."},"cost":2,"betAmount":100,
-    "effects": [{"op":"inc","path":"/defense","value":2},{"op":"inc","path":"/ratePoints","value":1}]},
-  {"id":"i35","name":{"ru":"Дыхательная техника","en":"Breathing Technique"},"text":{"ru":"Глубокий вдох, медленный выдох.","en":"Deep breath in, slow breath out."},"cost":1,"betAmount":50,
-    "effects": [{"op":"inc","path":"/health","value":3},{"op":"inc","path":"/ratePoints","value":1}]},
-
-  {"id":"i36","name":{"ru":"Подкуп стражи","en":"Bribe the Guards"},"text":{"ru":"'Потерять' часть ставок оппонента.","en":"'Lose' some of the opponent's bets."},"cost":2,"betAmount":50,
-    "effects": [{"op":"dec_bet","path":"/opponent_bets","value":200}]},
-  {"id":"i37","name":{"ru":"Мелкая кража","en":"Petty Theft"},"text":{"ru":"Кто-то стащил кошелек...","en":"Someone stole a purse..."},"cost":2,"betAmount":50,
-    "effects": [{"op":"dec_bet","path":"/opponent_bets","value":200}]},
-  {"id":"i38","name":{"ru":"Рейд на букмекера","en":"Bookie Raid"},"text":{"ru":"'Конфисковать' все ставки оппонента.","en":"'Confiscate' all opponent bets."},"cost":3,"betAmount":100,
-    "effects": [{"op":"dec_bet","path":"/opponent_bets","value":300}]},
-  {"id":"i39","name":{"ru":"Аннулировать ставки","en":"Void Bets"},"text":{"ru":"Эти ставки 'недействительны'.","en":"These bets are 'invalid'."},"cost":3,"betAmount":100,
-    "effects": [{"op":"dec_bet","path":"/opponent_bets","value":300}]}
+  {
+    "id": "i1",
+    "name": { "ru": "Подкупленный кузнец", "en": "Bribed Smith" },
+    "text": { "ru": "Укрепил' пару пластин.", "en": "Reinforced' a few plates." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": 1 },
+      { "op": "inc", "path": "/defense", "value": 1 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i2",
+    "name": { "ru": "Наводка от тренера", "en": "Tip from the Trainer" },
+    "text": { "ru": "Бить в левое колено.", "en": "Aim for the left knee." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": 2 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i3",
+    "name": { "ru": "Специальная 'диета'", "en": "Special 'Diet'" },
+    "text": { "ru": "Особый мясной пирог.", "en": "A special meat pie." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": 2 },
+      { "op": "inc", "path": "/ratePoints", "value": 1 },
+      { "op": "inc", "path": "/health", "value": 3 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i5",
+    "name": { "ru": "Стимуляторы", "en": "Stimulants" },
+    "text": { "ru": "Сердце бьется как бешеное.", "en": "The heart is pounding like crazy." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": 4 },
+      { "op": "inc", "path": "/ratePoints", "value": 2 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i6",
+    "name": { "ru": "Гнев толпы", "en": "Rage of the Crowd" },
+    "text": { "ru": "Он в ярости от их криков!", "en": "He is furious from their shouts!" },
+    "cost": 2,
+    "betAmount": 300,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": 3 },
+      { "op": "inc", "path": "/health", "value": 5 },
+      { "op": "inc", "path": "/ratePoints", "value": 3 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i9",
+    "name": { "ru": "Старая травма", "en": "Old Injury" },
+    "text": { "ru": "Друг' в раздевалке нажал, куда надо.", "en": "A 'friend' in the locker room pressed right spot." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": -2 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i12",
+    "name": { "ru": "Тяжелая обувь", "en": "Heavy Boots" },
+    "text": { "ru": "Кто-то подменил его сапоги.", "en": "Someone replaced his boots." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": -3 },
+      { "op": "inc", "path": "/ratePoints", "value": -1 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i14",
+    "name": { "ru": "Улучшенные ремни", "en": "Better Straps" },
+    "text": { "ru": "Доспех сидит как влитой.", "en": "The armor fits like a glove." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/defense", "value": 2 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i15",
+    "name": { "ru": "Дополнительная пластина", "en": "Extra Plate" },
+    "text": { "ru": "Незаметно вшита под тунику.", "en": "Discreetly sewn under the tunic." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/defense", "value": 2 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i16",
+    "name": { "ru": "Качественная сталь", "en": "Quality Steel" },
+    "text": { "ru": "Эта броня не подделка.", "en": "This armor is not a fake." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/defense", "value": 4 },
+      { "op": "inc", "path": "/ratePoints", "value": 2 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i18",
+    "name": { "ru": "Кислота на ремни", "en": "Acid on Straps" },
+    "text": { "ru": "Оно продержится... наверное.", "en": "It will hold... probably." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/defense", "value": -2 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i19",
+    "name": { "ru": "Подпиленный доспех", "en": "Sawed Armor" },
+    "text": { "ru": "Треснет от первого же удара.", "en": "Will crack on the first hit." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/defense", "value": -3 },
+      { "op": "inc", "path": "/ratePoints", "value": -1 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i20",
+    "name": { "ru": "Сытный обед", "en": "Hearty Meal" },
+    "text": { "ru": "Хорошо поел - хорошо дерется.", "en": "A good meal means a good fight." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/health", "value": 10 },
+      { "op": "inc", "path": "/ratePoints", "value": 2 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i21",
+    "name": { "ru": "Безрассудство", "en": "Recklessness" },
+    "text": { "ru": "Ему обещали двойную плату, если он 'атакует'.", "en": "He was promised double pay to 'charge'." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": 5 },
+      { "op": "inc", "path": "/defense", "value": -2 },
+      { "op": "inc", "path": "/ratePoints", "value": 2 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i22",
+    "name": { "ru": "Черепашья тактика", "en": "Turtle Tactics" },
+    "text": { "ru": "Ему приказали 'не рисковать'.", "en": "He was ordered to 'play it safe'." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": -2 },
+      { "op": "inc", "path": "/defense", "value": 5 },
+      { "op": "inc", "path": "/ratePoints", "value": 2 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i23",
+    "name": { "ru": "Распустить слухи", "en": "Spread Rumors" },
+    "text": { "ru": "Говорят, он непобедим.", "en": "They say he is unbeatable." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/ratePoints", "value": 3 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i24",
+    "name": { "ru": "Угрозы в раздевалке", "en": "Locker Room Threats" },
+    "text": { "ru": "Мы знаем, где живет твоя семья'.", "en": "We know where your family lives'." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/ratePoints", "value": -3 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i25",
+    "name": { "ru": "Плохая вода", "en": "Tainted Water" },
+    "text": { "ru": "Что-то живот крутит...", "en": "My stomach feels... funny." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/attack", "value": -1 },
+      { "op": "inc", "path": "/defense", "value": -1 },
+      { "op": "inc", "path": "/ratePoints", "value": -2 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i26",
+    "name": { "ru": "Благословение жреца", "en": "Priest's Blessing" },
+    "text": { "ru": "Боги на его стороне. (За деньги).", "en": "The gods are on his side. (For money)." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/health", "value": 5 },
+      { "op": "inc", "path": "/defense", "value": 1 },
+      { "op": "inc", "path": "/ratePoints", "value": 1 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i27",
+    "name": { "ru": "Медосмотр", "en": "Medical Check-up" },
+    "text": { "ru": "Врач сказал, что он в отличной форме.", "en": "The doctor said he's in great shape." },
+    "cost": 2,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/health", "value": 6 },
+      { "op": "inc", "path": "/ratePoints", "value": 1 }
+    ],
+    "count": 3
+  },
+  {
+    "id": "i28",
+    "name": { "ru": "Целебный эликсир", "en": "Healing Elixir" },
+    "text": { "ru": "Глоток... и он как новенький.", "en": "One sip... and he's good as new." },
+    "cost": 4,
+    "betAmount": 200,
+    "effects": [
+      { "op": "inc", "path": "/health", "value": 10 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 1
+  },
+  {
+    "id": "i32",
+    "name": { "ru": "Священный ритуал", "en": "Sacred Ritual" },
+    "text": { "ru": "Жрец провел ритуал... за отдельную плату.", "en": "The priest performed a ritual... for a fee." },
+    "cost": 3,
+    "betAmount": 300,
+    "effects": [
+      { "op": "inc", "path": "/health", "value": 6 },
+      { "op": "inc", "path": "/attack", "value": 3 },
+      { "op": "inc", "path": "/ratePoints", "value": 3 }
+    ],
+    "count": 2
+  },
+  {
+    "id": "i35",
+    "name": { "ru": "Дыхательная техника", "en": "Breathing Technique" },
+    "text": { "ru": "Глубокий вдох, медленный выдох.", "en": "Deep breath in, slow breath out." },
+    "cost": 1,
+    "betAmount": 100,
+    "effects": [
+      { "op": "inc", "path": "/health", "value": 3 },
+      { "op": "inc", "path": "/ratePoints", "value": 0 }
+    ],
+    "count": 5
+  },
+  {
+    "id": "i36",
+    "name": { "ru": "Подкуп стражи", "en": "Bribe the Guards" },
+    "text": { "ru": "Потерять' часть ставок оппонента.", "en": "Lose' some of the opponent's bets." },
+    "cost": 1,
+    "betAmount": 200,
+    "effects": [
+      { "op": "dec_bet", "path": "/opponent_bets", "value": 100 }
+    ],
+    "count": 5
+  }
 ]

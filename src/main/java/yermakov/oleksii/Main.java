@@ -3,6 +3,7 @@ package yermakov.oleksii;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -37,48 +38,33 @@ public class Main extends Application {
 
     private static final String CREATURES_FILE = "creatures.json";
     private static final String INFLUENCE_FILE = "influenceCards.json";
-    private static final int STARTING_HAND_SIZE = 5;
-    private static final int MAX_HAND_SIZE = 5;
-    private static final int MAX_TURN_POINTS = 4;
-    private static final int MAX_ROUNDS_PER_BATTLE = 4;
-    private static final int MAX_BATTLES = 3;
-    private int currentRound = 1;
-    private int currentBattle = 1;
-
-    private static final int ATTACK_TIER_1_MAX = 6;
-    private static final int ATTACK_TIER_2_MAX = 14;
-    private static final int DEFENSE_TIER_1_MAX = 3;
-    private static final int DEFENSE_TIER_2_MAX = 8;
-
-    private static final double BATTLE_STEP_DELAY = 1.0;
-
-    private static final int BET_REWARD_GREEN_THRESHOLD = 4;
-    private static final int BET_REWARD_RED_THRESHOLD = 8;
-    private static final double REWARD_YELLOW_MULT = 1.0;
-    private static final double REWARD_GREEN_MULT = 2.0;
-    private static final double REWARD_RED_MULT = 3.0;
-    private enum RewardTier { YELLOW, GREEN, RED }
+    private static final String CONFIG_FILE = "config.json";
+    private static GameConfig config;
 
     private final Map<String, CardData> allCards = new HashMap<>();
     private final List<CardData> creatureTemplates = new ArrayList<>();
+    private final List<CardData> influenceCardTemplates = new ArrayList<>();
     private final List<CardData> influenceDeck = new ArrayList<>();
 
-    private CreatureState creature1State;
-    private CreatureState creature2State;
+    public CreatureState creature1State;
+    public CreatureState creature2State;
     public enum Player { PLAYER_1, PLAYER_2 }
-    public Player currentPlayer; // Сделано public для PatchUtils
-    private final List<CardData> player1Hand = new ArrayList<>();
-    private final List<CardData> player2Hand = new ArrayList<>();
-    private int currentTurnPointsUsed = 0;
-
-    // Сделано public для PatchUtils
+    public Player currentPlayer;
+    public final List<CardData> player1Hand = new ArrayList<>();
+    public final List<CardData> player2Hand = new ArrayList<>();
+    public int currentTurnPointsUsed = 0;
     public int p1_BetsOn_C1 = 0;
     public int p2_BetsOn_C1 = 0;
     public int p1_BetsOn_C2 = 0;
     public int p2_BetsOn_C2 = 0;
 
-    private int player1TotalScore = 0;
-    private int player2TotalScore = 0;
+    public int player1TotalScore = 0;
+    public int player2TotalScore = 0;
+
+    public int currentRound = 1;
+    public int currentBattle = 1;
+
+    private enum RewardTier { YELLOW, GREEN, RED }
 
     private HBox handBox;
     private Text turnPointsText;
@@ -105,7 +91,7 @@ public class Main extends Application {
     private Text battleC1Stats;
     private Text battleC2Stats;
     private Button battleButton;
-
+    private VBox urnPane;
     private static Path externalDataPath;
 
 
@@ -203,7 +189,9 @@ public class Main extends Application {
         Region spacerLeft = new Region();
         HBox.setHgrow(spacerLeft, Priority.ALWAYS);
 
-        HBox bottomBar = new HBox(10, player1ScoreText, player2ScoreText, spacerLeft, endTurnBtn);
+        urnPane = createUrnDropZone();
+
+        HBox bottomBar = new HBox(10, player1ScoreText, player2ScoreText, spacerLeft, urnPane, endTurnBtn);
         bottomBar.setAlignment(Pos.CENTER_LEFT);
         bottomBar.setPadding(new Insets(10, 0, 0, 0));
 
@@ -238,10 +226,23 @@ public class Main extends Application {
         creature1State = new CreatureState(creatureTemplates.get(0));
         creature2State = new CreatureState(creatureTemplates.get(1));
 
-        for (int i = 0; i < STARTING_HAND_SIZE; i++) {
+        buildPlayableDeck();
+
+        for (int i = 0; i < config.STARTING_HAND_SIZE; i++) {
             drawCardToHandData(Player.PLAYER_1);
             drawCardToHandData(Player.PLAYER_2);
         }
+    }
+
+    private void buildPlayableDeck() {
+        influenceDeck.clear();
+        for (CardData template : influenceCardTemplates) {
+            int count = template.getCount();
+            for (int i = 0; i < count; i++) {
+                influenceDeck.add(template);
+            }
+        }
+        Collections.shuffle(influenceDeck);
     }
 
     private void endTurn() {
@@ -250,7 +251,7 @@ public class Main extends Application {
             currentTurnPointsUsed = 0;
             drawCardsToMax(Player.PLAYER_2);
         } else {
-            if (currentRound >= MAX_ROUNDS_PER_BATTLE) {
+            if (currentRound >= config.MAX_ROUNDS_PER_BATTLE) {
                 startBattle();
                 return;
             } else {
@@ -267,7 +268,7 @@ public class Main extends Application {
 
     private void drawCardsToMax(Player player) {
         List<CardData> currentHand = (player == Player.PLAYER_1) ? player1Hand : player2Hand;
-        int cardsToDraw = MAX_HAND_SIZE - currentHand.size();
+        int cardsToDraw = config.MAX_HAND_SIZE - currentHand.size();
 
         if (cardsToDraw > 0) {
             for (int i = 0; i < cardsToDraw; i++) {
@@ -279,9 +280,9 @@ public class Main extends Application {
     private void updateTurnPointsText() {
         String playerLabel = (currentPlayer == Player.PLAYER_1) ? I18n.getString("label.player1") : I18n.getString("label.player2");
         turnPointsText.setText(String.format(I18n.getString("label.turnInfo"),
-                currentBattle, MAX_BATTLES,
-                currentRound, MAX_ROUNDS_PER_BATTLE,
-                playerLabel, currentTurnPointsUsed, MAX_TURN_POINTS));
+                currentBattle, config.MAX_BATTLES,
+                currentRound, config.MAX_ROUNDS_PER_BATTLE,
+                playerLabel, currentTurnPointsUsed, config.MAX_TURN_POINTS));
     }
 
     public void updateBetDisplays() {
@@ -404,33 +405,51 @@ public class Main extends Application {
         battleAttacker = battleDefender;
         battleDefender = temp;
 
-        PauseTransition stepDelay = new PauseTransition(Duration.seconds(BATTLE_STEP_DELAY));
+        PauseTransition stepDelay = new PauseTransition(Duration.seconds(config.BATTLE_STEP_DELAY));
         stepDelay.setOnFinished(e -> playBattleStep());
         stepDelay.play();
     }
 
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика Чистой Прибыли ---
     private void processBattleResults(CreatureState winner) {
         String winnerName = winner.getLocalizedName();
-        int player1Winnings;
-        int player2Winnings;
+        int p1WinningsFromWinner = 0;
+        int p1LossesFromLoser = 0;
+        int p2WinningsFromWinner = 0;
+        int p2LossesFromLoser = 0;
         RewardTier winnerTier;
 
         if (winner == creature1State) {
+            winnerName = creature1State.getLocalizedName();
             winnerTier = getRewardTier(creature1State, creature2State);
-            player1Winnings = (int)(p1_BetsOn_C1 * getRewardMultiplier(winnerTier));
-            player2Winnings = (int)(p2_BetsOn_C1 * getRewardMultiplier(winnerTier));
+
+            p1WinningsFromWinner = (int)(p1_BetsOn_C1 * getRewardMultiplier(winnerTier));
+            p2WinningsFromWinner = (int)(p2_BetsOn_C1 * getRewardMultiplier(winnerTier));
+
+            p1LossesFromLoser = p1_BetsOn_C2;
+            p2LossesFromLoser = p2_BetsOn_C2;
+
         } else {
+            winnerName = creature2State.getLocalizedName();
             winnerTier = getRewardTier(creature2State, creature1State);
-            player1Winnings = (int)(p1_BetsOn_C2 * getRewardMultiplier(winnerTier));
-            player2Winnings = (int)(p2_BetsOn_C2 * getRewardMultiplier(winnerTier));
+
+            p1WinningsFromWinner = (int)(p1_BetsOn_C2 * getRewardMultiplier(winnerTier));
+            p2WinningsFromWinner = (int)(p2_BetsOn_C2 * getRewardMultiplier(winnerTier));
+
+            p1LossesFromLoser = p1_BetsOn_C1;
+            p2LossesFromLoser = p2_BetsOn_C1;
         }
 
-        player1TotalScore += player1Winnings;
-        player2TotalScore += player2Winnings;
+        int player1NetProfit = p1WinningsFromWinner - p1LossesFromLoser;
+        int player2NetProfit = p2WinningsFromWinner - p2LossesFromLoser;
+
+        player1TotalScore += player1NetProfit;
+        player2TotalScore += player2NetProfit;
         updatePlayerTotalScores();
 
-        showEndGameDialog(winnerName, player1Winnings, player2Winnings, winnerTier);
+        showEndGameDialog(winnerName, player1NetProfit, player2NetProfit, winnerTier);
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void addBattleLog(String message) {
         Text text = new Text(message);
@@ -443,27 +462,31 @@ public class Main extends Application {
     }
 
     private String getCreatureBattleStats(CreatureState state) {
-        // Убедимся, что HP не отображается как отрицательное в бою
         int displayHealth = Math.max(0, state.currentHealth);
-        return String.format(I18n.getString("battle.statsHeader"), state.getLocalizedName(), displayHealth) +
+
+        String rpString = (state.bonusRatePoints > 0) ?
+                String.format(I18n.getString("battle.statsHeader.bonus"), state.getLocalizedName(), displayHealth, state.currentRatePoints, state.bonusRatePoints) :
+                String.format(I18n.getString("battle.statsHeader"), state.getLocalizedName(), displayHealth);
+
+        return rpString +
                 "\n" +
                 String.format(" ATK: %d (%s)", state.currentAttack, I18n.getString("label.diceLabel." + getDiceCount(state.currentAttack))) +
                 "\n" +
                 String.format(" DEF: %d (%s)", state.currentDefense, I18n.getString("label.defenseBlock." + getDefenseBlock(state.currentDefense))) +
                 "\n" +
-                String.format(" RP: %d", state.currentRatePoints);
+                String.format(" RP: %d (%s)", state.getTotalRP(), state.getLocalizedName());
     }
 
     private RewardTier getRewardTier(CreatureState betOn, CreatureState opponent) {
-        int rpDiff = betOn.currentRatePoints - opponent.currentRatePoints;
+        int rpDiff = betOn.getTotalRP() - opponent.getTotalRP();
         if (rpDiff > 0) {
             return RewardTier.YELLOW;
         } else {
             int diff = Math.abs(rpDiff);
-            if (diff < BET_REWARD_GREEN_THRESHOLD) {
+            if (diff < config.BET_REWARD_GREEN_THRESHOLD) {
                 return RewardTier.YELLOW;
             }
-            if (diff < BET_REWARD_RED_THRESHOLD) {
+            if (diff < config.BET_REWARD_RED_THRESHOLD) {
                 return RewardTier.GREEN;
             }
             return RewardTier.RED;
@@ -472,18 +495,18 @@ public class Main extends Application {
 
     private double getRewardMultiplier(RewardTier tier) {
         switch (tier) {
-            case GREEN: return REWARD_GREEN_MULT;
-            case RED: return REWARD_RED_MULT;
+            case GREEN: return config.REWARD_GREEN_MULT;
+            case RED: return config.REWARD_RED_MULT;
             case YELLOW:
-            default: return REWARD_YELLOW_MULT;
+            default: return config.REWARD_YELLOW_MULT;
         }
     }
 
     private int getDiceCount(int attack) {
-        if (attack <= ATTACK_TIER_1_MAX) {
+        if (attack <= config.ATTACK_TIER_1_MAX) {
             return 1;
         }
-        if (attack <= ATTACK_TIER_2_MAX) {
+        if (attack <= config.ATTACK_TIER_2_MAX) {
             return 2;
         }
         return 3;
@@ -493,30 +516,32 @@ public class Main extends Application {
         if (defense <= 0) {
             return 0;
         }
-        if (defense <= DEFENSE_TIER_1_MAX) {
+        if (defense <= config.DEFENSE_TIER_1_MAX) {
             return 1;
         }
-        if (defense <= DEFENSE_TIER_2_MAX) {
+        if (defense <= config.DEFENSE_TIER_2_MAX) {
             return 2;
         }
         return 3;
     }
 
-    private void showEndGameDialog(String winnerName, int p1Winnings, int p2Winnings, RewardTier tier) {
+    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Отображение Чистой Прибыли (Net Profit) ---
+    private void showEndGameDialog(String winnerName, int p1NetProfit, int p2NetProfit, RewardTier tier) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle(I18n.getString("game.endTitle"));
             alert.setHeaderText(String.format(I18n.getString("battle.winner"), winnerName));
 
             Label p1Label = new Label(I18n.getString("label.player1") + " " + I18n.getString("game.winnings.simple") + ":");
-            Label p1Amount = new Label("" + p1Winnings);
-            p1Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
+            Label p1Amount = new Label("" + p1NetProfit);
+            // Если Профит отрицательный, делаем красным. Если положительный - цвет множителя.
+            p1Amount.getStyleClass().add(p1NetProfit < 0 ? "reward-red" : "reward-" + tier.name().toLowerCase());
 
             Label p2Label = new Label(I18n.getString("label.player2") + " " + I18n.getString("game.winnings.simple") + ":");
-            Label p2Amount = new Label("" + p2Winnings);
-            p2Amount.getStyleClass().add("reward-" + tier.name().toLowerCase());
+            Label p2Amount = new Label("" + p2NetProfit);
+            p2Amount.getStyleClass().add(p2NetProfit < 0 ? "reward-red" : "reward-" + tier.name().toLowerCase());
 
-                    GridPane grid = new GridPane();
+            GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(10);
             grid.add(p1Label, 0, 0);
@@ -529,12 +554,12 @@ public class Main extends Application {
 
             alert.showAndWait();
 
-            if (currentBattle >= MAX_BATTLES) {
+            if (currentBattle >= config.MAX_BATTLES) {
                 Alert matchOverAlert = new Alert(Alert.AlertType.INFORMATION);
                 matchOverAlert.setTitle(I18n.getString("game.matchOver.title"));
                 matchOverAlert.setHeaderText(null);
                 matchOverAlert.setContentText(String.format(I18n.getString("game.matchOver.content"),
-                        MAX_BATTLES, player1TotalScore, player2TotalScore));
+                        config.MAX_BATTLES, player1TotalScore, player2TotalScore));
                 matchOverAlert.getButtonTypes().setAll(new ButtonType(I18n.getString("game.matchOver.newMatch")));
                 matchOverAlert.showAndWait();
 
@@ -549,6 +574,7 @@ public class Main extends Application {
             restartGame();
         });
     }
+    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void restartGame() {
         currentRound = 1;
@@ -565,6 +591,7 @@ public class Main extends Application {
 
         clearDropZone(centralDropZone1);
         clearDropZone(centralDropZone2);
+        clearDropZone(urnPane);
 
         refreshCreaturePane(creature1Pane, creature1State);
         refreshCreaturePane(creature2Pane, creature2State);
@@ -575,7 +602,11 @@ public class Main extends Application {
     }
 
     private void clearDropZone(VBox dropZone) {
-        dropZone.getChildren().clear();
+        if (dropZone == null) return;
+
+        if (dropZone.getChildren().size() > 1) {
+            dropZone.getChildren().remove(1, dropZone.getChildren().size());
+        }
         if (dropZone.getUserData() instanceof List) {
             ((List<?>) dropZone.getUserData()).clear();
         }
@@ -597,16 +628,22 @@ public class Main extends Application {
 
     private void drawCardToHandData(Player player) {
         if (influenceDeck.isEmpty()) {
+            triggerDeckEmptyGameOver();
             return;
         }
-        int idx = ThreadLocalRandom.current().nextInt(influenceDeck.size());
-        CardData card = influenceDeck.get(idx);
+
+        CardData card = influenceDeck.remove(influenceDeck.size() - 1);
 
         if (player == Player.PLAYER_1) {
             player1Hand.add(card);
         } else {
             player2Hand.add(card);
         }
+    }
+
+    private void triggerDeckEmptyGameOver() {
+        showError(I18n.getString("error.deckEmpty.title"), I18n.getString("error.deckEmpty.content"));
+        Platform.exit();
     }
 
     private VBox createCreaturePane(CreatureState state) {
@@ -618,7 +655,59 @@ public class Main extends Application {
         return creatureCardPane;
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика стоимости 1 ОД ---
+    private VBox createUrnDropZone() {
+        VBox urn = new VBox(4);
+        urn.setPrefSize(180, 50);
+        urn.setMinSize(180, 50);
+        urn.setAlignment(Pos.CENTER);
+        urn.getStyleClass().add("drop-area");
+
+        Text label = new Text(I18n.getString("label.urn"));
+        label.getStyleClass().add("card-text");
+        urn.getChildren().add(label);
+
+        urn.setOnDragOver(ev -> {
+            if (ev.getGestureSource() != urn && ev.getDragboard().hasString()) {
+                ev.acceptTransferModes(TransferMode.MOVE);
+                urn.getStyleClass().add("drop-area-hover");
+            }
+            ev.consume();
+        });
+
+        urn.setOnDragExited(ev -> {
+            urn.getStyleClass().remove("drop-area-hover");
+            ev.consume();
+        });
+
+        urn.setOnDragDropped(ev -> {
+            Dragboard db = ev.getDragboard();
+            boolean success = false;
+            if (db.hasString()) {
+                int costToDiscard = 1;
+                if (currentTurnPointsUsed + costToDiscard <= config.MAX_TURN_POINTS) {
+
+                    String content = db.getString();
+                    String cardId = content.split(";")[0];
+
+                    currentTurnPointsUsed += costToDiscard;
+                    updateTurnPointsText();
+                    removeCardFromHandById(cardId);
+                    updateHandDisplay();
+                    success = true;
+                } else {
+                    showInfo(String.format(I18n.getString("error.notEnoughPoints"),
+                            costToDiscard,
+                            (config.MAX_TURN_POINTS - currentTurnPointsUsed)
+                    ));
+                }
+            }
+            ev.setDropCompleted(success);
+            ev.consume();
+        });
+
+        return urn;
+    }
+
     private VBox createCentralDropZone(VBox targetPane, int targetBetId) {
         VBox dropArea = new VBox(4);
         dropArea.setPrefSize(220, 180);
@@ -655,20 +744,18 @@ public class Main extends Application {
                 CardData cd = allCards.get(cardId);
                 if (cd == null) return;
 
-                // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) ---
-                int costToPlay = "bet".equals(mode) ? 1 : cd.cost;
-                // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+                int costToPlay = cd.cost;
 
-                if (currentTurnPointsUsed + costToPlay <= MAX_TURN_POINTS) {
+                if (currentTurnPointsUsed + costToPlay <= config.MAX_TURN_POINTS) {
                     currentTurnPointsUsed += costToPlay;
                     updateTurnPointsText();
                     removeCardFromHandById(cardId);
 
+                    CreatureState currentState = (CreatureState) targetPane.getUserData();
+
                     if ("buff".equals(mode)) {
-                        CreatureState currentState = (CreatureState) targetPane.getUserData();
                         if (cd.effects != null) {
                             for (Effect effect : cd.effects) {
-                                // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Передаем 'this' (Main) ---
                                 PatchUtils.applyEffect(this, currentState, effect, targetBetId);
                             }
                         }
@@ -681,22 +768,28 @@ public class Main extends Application {
                         dropArea.getChildren().add(small);
                     }
                     else if ("bet".equals(mode)) {
+                        int betAmount = cd.getBetAmount();
                         if (targetBetId == 1) {
                             if (currentPlayer == Player.PLAYER_1) {
-                                p1_BetsOn_C1 += cd.betAmount;
+                                p1_BetsOn_C1 += betAmount;
                             } else {
-                                p2_BetsOn_C1 += cd.betAmount;
+                                p2_BetsOn_C1 += betAmount;
                             }
+                            int totalBet = p1_BetsOn_C1 + p2_BetsOn_C1;
+                            currentState.bonusRatePoints = totalBet / config.BET_AMOUNT_PER_RP;
                         } else {
                             if (currentPlayer == Player.PLAYER_1) {
-                                p1_BetsOn_C2 += cd.betAmount;
+                                p1_BetsOn_C2 += betAmount;
                             } else {
-                                p2_BetsOn_C2 += cd.betAmount;
+                                p2_BetsOn_C2 += betAmount;
                             }
+                            int totalBet = p1_BetsOn_C2 + p2_BetsOn_C2;
+                            currentState.bonusRatePoints = totalBet / config.BET_AMOUNT_PER_RP;
                         }
                         updateBetDisplays();
+                        refreshCreaturePane(targetPane, currentState);
 
-                        Text betText = new Text(String.format(I18n.getString("label.betText"), cd.betAmount));
+                        Text betText = new Text(String.format(I18n.getString("label.betText"), betAmount));
                         betText.getStyleClass().add(
                                 (currentPlayer == Player.PLAYER_1) ? "bet-text-p1" : "bet-text-p2"
                         );
@@ -712,8 +805,8 @@ public class Main extends Application {
                     updateAllScales();
                 } else {
                     showInfo(String.format(I18n.getString("error.notEnoughPoints"),
-                            costToPlay, // Показываем реальную стоимость
-                            (MAX_TURN_POINTS - currentTurnPointsUsed)
+                            costToPlay,
+                            (config.MAX_TURN_POINTS - currentTurnPointsUsed)
                     ));
                 }
             }
@@ -742,10 +835,12 @@ public class Main extends Application {
                     if (def != 0) effectStrings.add(String.format(I18n.getString("info.effect.def"), (def > 0 ? "+" : ""), def));
                     int rp = cd.getStatChange("/ratePoints");
                     if (rp != 0) effectStrings.add(String.format(I18n.getString("info.effect.rp"), (rp > 0 ? "+" : ""), rp));
+
                     int betDec = cd.getStatChange("/opponent_bets");
                     if (betDec > 0) effectStrings.add(String.format(I18n.getString("info.effect.betDec"), betDec));
-                    if (cd.betAmount > 0) {
-                        effectStrings.add(String.format(I18n.getString("info.effect.bet"), cd.betAmount));
+
+                    if (cd.getBetAmount() > 0) {
+                        effectStrings.add(String.format(I18n.getString("info.effect.bet"), cd.getBetAmount()));
                     }
 
                     if (!effectStrings.isEmpty()) {
@@ -770,10 +865,19 @@ public class Main extends Application {
         name.getStyleClass().add("card-title");
         name.wrappingWidthProperty().bind(creaturePane.widthProperty().subtract(16));
 
-        String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
-                state.currentHealth, state.baseHealth,
-                state.currentAttack, state.currentDefense,
-                state.currentRatePoints);
+        String stats;
+        if (state.bonusRatePoints > 0) {
+            stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d (+%d)",
+                    state.currentHealth, state.baseHealth,
+                    state.currentAttack, state.currentDefense,
+                    state.currentRatePoints, state.bonusRatePoints);
+        } else {
+            stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
+                    state.currentHealth, state.baseHealth,
+                    state.currentAttack, state.currentDefense,
+                    state.currentRatePoints);
+        }
+
         Text statsText = new Text(stats);
         statsText.getStyleClass().add("card-stats");
 
@@ -802,7 +906,7 @@ public class Main extends Application {
         addStatChangeText(statsBox, "ATK", data.getStatChange("/attack"), "atk");
         addStatChangeText(statsBox, "DEF", data.getStatChange("/defense"), "def");
         addStatChangeText(statsBox, "RP", data.getStatChange("/ratePoints"), "rp");
-        addStatChangeText(statsBox, "deBET", data.getStatChange("/opponent_bets"), "bet-dec");
+        addStatChangeText(statsBox, "BET-", data.getStatChange("/opponent_bets"), "bet-dec");
 
         if (!statsBox.getChildren().isEmpty()) {
             buffView.getChildren().add(statsBox);
@@ -821,9 +925,12 @@ public class Main extends Application {
             costText.getStyleClass().add("card-cost");
             buffFooter.setLeft(costText);
         }
-        Text betHint = new Text("$" + data.betAmount);
-        betHint.getStyleClass().add("card-bet-hint");
-        buffFooter.setRight(betHint);
+
+        if (data.getBetAmount() > 0) {
+            Text betHint = new Text("$" + data.getBetAmount());
+            betHint.getStyleClass().add("card-bet-hint");
+            buffFooter.setRight(betHint);
+        }
 
         buffView.getChildren().addAll(desc, buffSpacer, buffFooter);
         VBox.setVgrow(buffView, Priority.ALWAYS);
@@ -837,7 +944,7 @@ public class Main extends Application {
 
         Text betLabel = new Text(I18n.getString("label.bet"));
         betLabel.getStyleClass().add("card-cost");
-        Text betAmountText = new Text(String.format(I18n.getString("label.betAmount"), data.betAmount));
+        Text betAmountText = new Text(String.format(I18n.getString("label.betAmount"), data.getBetAmount()));
         betAmountText.getStyleClass().add("bet-amount-text");
 
         Region betSpacer2 = new Region();
@@ -854,18 +961,24 @@ public class Main extends Application {
         box.getChildren().addAll(name, contentStack);
 
         box.getProperties().put("isBet", false);
-        box.setOnMouseClicked(ev -> {
-            boolean isBet = (boolean) box.getProperties().get("isBet");
-            box.getProperties().put("isBet", !isBet);
 
-            buffView.setVisible(isBet);
-            buffView.setManaged(isBet);
-            betView.setVisible(!isBet);
-            betView.setManaged(!isBet);
-        });
+        if (data.getBetAmount() > 0) {
+            box.setOnMouseClicked(ev -> {
+                boolean isBet = (boolean) box.getProperties().get("isBet");
+                box.getProperties().put("isBet", !isBet);
+                buffView.setVisible(isBet);
+                buffView.setManaged(isBet);
+                betView.setVisible(!isBet);
+                betView.setManaged(!isBet);
+            });
+        } else {
+            box.setOnMouseClicked(ev -> {
+                showInfo(I18n.getString("info.noBet"));
+            });
+        }
 
         box.setOnDragDetected(ev -> {
-            boolean isBet = (boolean) box.getProperties().get("isBet");
+            boolean isBet = (data.getBetAmount() > 0) ? (boolean) box.getProperties().get("isBet") : false;
             String mode = isBet ? "bet" : "buff";
 
             Dragboard db = box.startDragAndDrop(TransferMode.MOVE);
@@ -892,10 +1005,19 @@ public class Main extends Application {
         desc.wrappingWidthProperty().bind(box.widthProperty().subtract(12));
 
         if (large && state != null) {
-            String stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
-                    state.currentHealth, state.baseHealth,
-                    state.currentAttack, state.currentDefense,
-                    state.currentRatePoints);
+            String stats;
+            if (state.bonusRatePoints > 0) {
+                stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d (+%d)",
+                        state.currentHealth, state.baseHealth,
+                        state.currentAttack, state.currentDefense,
+                        state.currentRatePoints, state.bonusRatePoints);
+            } else {
+                stats = String.format("HP: %d/%d | ATK: %d | DEF: %d | RP: %d",
+                        state.currentHealth, state.baseHealth,
+                        state.currentAttack, state.currentDefense,
+                        state.currentRatePoints);
+            }
+
             Text statsText = new Text(stats);
             statsText.getStyleClass().add("card-stats");
             box.getChildren().addAll(name, statsText, desc);
@@ -1010,7 +1132,7 @@ public class Main extends Application {
 
     private void updateBetRewardScales() {
         if (creature1State == null || creature2State == null) return;
-        int rpDiff = creature1State.currentRatePoints - creature2State.currentRatePoints;
+        int rpDiff = creature1State.getTotalRP() - creature2State.getTotalRP();
         updateRewardRow(betRewardScaleC1Row, rpDiff > 0, Math.abs(rpDiff));
         updateRewardRow(betRewardScaleC2Row, rpDiff < 0, Math.abs(rpDiff));
     }
@@ -1027,9 +1149,9 @@ public class Main extends Application {
         if (isFavorite) {
             yellow.setOpacity(1.0);
         } else {
-            if (diff < BET_REWARD_GREEN_THRESHOLD) {
+            if (diff < config.BET_REWARD_GREEN_THRESHOLD) {
                 yellow.setOpacity(1.0);
-            } else if (diff < BET_REWARD_RED_THRESHOLD) {
+            } else if (diff < config.BET_REWARD_RED_THRESHOLD) {
                 green.setOpacity(1.0);
             } else {
                 red.setOpacity(1.0);
@@ -1077,14 +1199,19 @@ public class Main extends Application {
     }
 
     private void loadDataWithJackson() throws IOException, URISyntaxException {
+        createDefaultDataFileIfMissing(CONFIG_FILE);
+        Path configPath = externalDataPath.resolve(CONFIG_FILE);
+
+        ObjectMapper mapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+        config = mapper.readValue(Files.newInputStream(configPath), GameConfig.class);
+
         createDefaultDataFileIfMissing(CREATURES_FILE);
         createDefaultDataFileIfMissing(INFLUENCE_FILE);
 
         Path creaturesPath = externalDataPath.resolve(CREATURES_FILE);
         Path influencePath = externalDataPath.resolve(INFLUENCE_FILE);
-
-        ObjectMapper mapper = new ObjectMapper()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
         List<CardData> creatureList = mapper.readValue(
                 Files.newInputStream(creaturesPath),
@@ -1097,8 +1224,7 @@ public class Main extends Application {
         );
 
         creatureTemplates.addAll(creatureList);
-        influenceDeck.addAll(influenceList);
-        Collections.shuffle(influenceDeck);
+        influenceCardTemplates.addAll(influenceList);
 
         for (CardData c : creatureList) allCards.put(c.id, c);
         for (CardData c : influenceList) allCards.put(c.id, c);
@@ -1108,13 +1234,19 @@ public class Main extends Application {
         Path externalPath = externalDataPath.resolve(fileName);
 
         if (Files.notExists(externalPath)) {
-            try (InputStream resourceStream = getResourceStream(fileName)) {
-                if (resourceStream == null) {
-                    throw new IOException("Внутренний ресурс не найден: " + fileName);
+            if (fileName.equals(CONFIG_FILE)) {
+                ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+                GameConfig defaultConfig = new GameConfig();
+                Files.writeString(externalPath, mapper.writeValueAsString(defaultConfig));
+            } else {
+                try (InputStream resourceStream = getResourceStream(fileName)) {
+                    if (resourceStream == null) {
+                        throw new IOException("Внутренний ресурс не найден: " + fileName);
+                    }
+                    Files.copy(resourceStream, externalPath);
+                } catch (Exception e) {
+                    throw new IOException("Не удалось создать внешний файл: " + fileName, e);
                 }
-                Files.copy(resourceStream, externalPath);
-            } catch (Exception e) {
-                throw new IOException("Не удалось создать внешний файл: " + fileName, e);
             }
         }
     }
@@ -1198,8 +1330,7 @@ public class Main extends Application {
             .card-stat-def-neg { -fx-fill: #000080; }
             .card-stat-rp-pos  { -fx-fill: #FFA500; }
             .card-stat-rp-neg  { -fx-fill: #8B4513; }
-            .card-stat-bet-dec-pos { -fx-fill: #8A2BE2; }
-            .card-stat-bet-dec-neg { -fx-fill: #8A2BE2; }
+            .card-stat-bet-dec-pos, .card-stat-bet-dec-neg { -fx-fill: #8A2BE2; }
             
             .card-stats {
               -fx-font-size: 14px;
@@ -1318,22 +1449,46 @@ public class Main extends Application {
             """;
     }
 
+    public static class GameConfig {
+        public int STARTING_HAND_SIZE = 5;
+        public int MAX_HAND_SIZE = 5;
+        public int MAX_TURN_POINTS = 4;
+        public int MAX_ROUNDS_PER_BATTLE = 4;
+        public int MAX_BATTLES = 3;
+        public int ATTACK_TIER_1_MAX = 6;
+        public int ATTACK_TIER_2_MAX = 14;
+        public int DEFENSE_TIER_1_MAX = 3;
+        public int DEFENSE_TIER_2_MAX = 8;
+        public double BATTLE_STEP_DELAY = 1.0;
+        public int BET_REWARD_GREEN_THRESHOLD = 4;
+        public int BET_REWARD_RED_THRESHOLD = 8;
+        public double REWARD_YELLOW_MULT = 1.0;
+        public double REWARD_GREEN_MULT = 2.0;
+        public double REWARD_RED_MULT = 3.0;
+        public int BET_AMOUNT_PER_RP = 300;
+    }
+
     public static class CardData {
         public String id;
         public Map<String, String> name;
         public Map<String, String> text;
         public int cost;
-        public int betAmount;
+        public Integer betAmount;
         public int health;
         public int attack;
         public int defense;
         public int ratePoints;
+        public Integer count;
         public List<Effect> effects;
 
         public CardData() {
             this.effects = new ArrayList<>();
             this.name = new HashMap<>();
             this.text = new HashMap<>();
+        }
+
+        public int getCount() {
+            return (count == null || count <= 0) ? 1 : count;
         }
 
         public int getStatChange(String path) {
@@ -1356,12 +1511,16 @@ public class Main extends Application {
         public String getLocalizedText() {
             return text.getOrDefault(I18n.getLang(), text.get("en"));
         }
+
+        public int getBetAmount() {
+            return (betAmount != null) ? betAmount : 0;
+        }
     }
 
     public static class Effect {
         public String op;
         public String path;
-        public Integer value; // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) int -> Integer
+        public Integer value;
         public Effect() {}
     }
 
@@ -1377,6 +1536,7 @@ public class Main extends Application {
         public int currentDefense;
         public int baseRatePoints;
         public int currentRatePoints;
+        public int bonusRatePoints;
 
         public CreatureState(CardData baseCard) {
             this.baseCard = baseCard;
@@ -1390,6 +1550,7 @@ public class Main extends Application {
             this.currentDefense = baseCard.defense;
             this.baseRatePoints = baseCard.ratePoints;
             this.currentRatePoints = baseCard.ratePoints;
+            this.bonusRatePoints = 0;
         }
 
         public String getLocalizedName() {
@@ -1397,6 +1558,9 @@ public class Main extends Application {
         }
         public String getLocalizedText() {
             return this.text;
+        }
+        public int getTotalRP() {
+            return currentRatePoints + bonusRatePoints;
         }
     }
 }

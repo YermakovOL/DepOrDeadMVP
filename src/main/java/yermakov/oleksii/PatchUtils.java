@@ -2,16 +2,8 @@ package yermakov.oleksii;
 
 public class PatchUtils {
 
-    /**
-     * Применяет эффект карты к состоянию существа или состоянию игры.
-     * @param mainApp Ссылка на главный класс Main для доступа к ставкам (p1_BetsOn_C1 и т.д.)
-     * @param creature Целевое существо
-     * @param effect Эффект для применения
-     * @param targetBetId ID цели (1 для C1, 2 для C2)
-     */
     public static void applyEffect(Main mainApp, Main.CreatureState creature, Main.Effect effect, int targetBetId) {
 
-        // Пропускаем пустые эффекты из JSON
         if (effect.op == null || effect.path == null || effect.value == null) {
             return;
         }
@@ -26,7 +18,10 @@ public class PatchUtils {
                 break;
 
             default:
-                System.err.println(String.format(I18n.getString("error.unsupportedOp"), effect.op));
+                // Игнорируем пустые "op"
+                if (!effect.op.isEmpty()) {
+                    System.err.println(String.format(I18n.getString("error.unsupportedOp"), effect.op));
+                }
         }
     }
 
@@ -45,7 +40,9 @@ public class PatchUtils {
                 creature.currentRatePoints = Math.max(1, creature.currentRatePoints + value);
                 break;
             default:
-                System.err.println(String.format(I18n.getString("error.unknownPath"), path));
+                if (!path.isEmpty()) {
+                    System.err.println(String.format(I18n.getString("error.unknownPath"), path));
+                }
         }
     }
 
@@ -60,23 +57,18 @@ public class PatchUtils {
 
         if (targetBetId == 1) { // Цель - Существо 1
             if (currentPlayer == Main.Player.PLAYER_1) {
-                // Игрок 1 атакует ставки Игрока 2 на Существо 1
                 mainApp.p2_BetsOn_C1 = Math.max(0, mainApp.p2_BetsOn_C1 - amountToRemove);
             } else {
-                // Игрок 2 атакует ставки Игрока 1 на Существо 1
                 mainApp.p1_BetsOn_C1 = Math.max(0, mainApp.p1_BetsOn_C1 - amountToRemove);
             }
         } else { // Цель - Существо 2
             if (currentPlayer == Main.Player.PLAYER_1) {
-                // Игрок 1 атакует ставки Игрока 2 на Существо 2
                 mainApp.p2_BetsOn_C2 = Math.max(0, mainApp.p2_BetsOn_C2 - amountToRemove);
             } else {
-                // Игрок 2 атакует ставки Игрока 1 на Существо 2
                 mainApp.p1_BetsOn_C2 = Math.max(0, mainApp.p1_BetsOn_C2 - amountToRemove);
             }
         }
 
-        // Немедленно обновляем UI ставок
         mainApp.updateBetDisplays();
     }
 }
