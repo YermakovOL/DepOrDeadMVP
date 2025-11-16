@@ -742,12 +742,8 @@ public class Main extends Application {
                     if (def != 0) effectStrings.add(String.format(I18n.getString("info.effect.def"), (def > 0 ? "+" : ""), def));
                     int rp = cd.getStatChange("/ratePoints");
                     if (rp != 0) effectStrings.add(String.format(I18n.getString("info.effect.rp"), (rp > 0 ? "+" : ""), rp));
-
-                    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Показ нового эффекта ---
                     int betDec = cd.getStatChange("/opponent_bets");
                     if (betDec > 0) effectStrings.add(String.format(I18n.getString("info.effect.betDec"), betDec));
-                    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
-
                     if (cd.betAmount > 0) {
                         effectStrings.add(String.format(I18n.getString("info.effect.bet"), cd.betAmount));
                     }
@@ -806,10 +802,7 @@ public class Main extends Application {
         addStatChangeText(statsBox, "ATK", data.getStatChange("/attack"), "atk");
         addStatChangeText(statsBox, "DEF", data.getStatChange("/defense"), "def");
         addStatChangeText(statsBox, "RP", data.getStatChange("/ratePoints"), "rp");
-
-        // --- ИЗМЕНЕНИЕ: (ЗАПРОС 3) Показ нового эффекта ---
-        addStatChangeText(statsBox, "BET-", data.getStatChange("/opponent_bets"), "bet-dec");
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+        addStatChangeText(statsBox, "deBET", data.getStatChange("/opponent_bets"), "bet-dec");
 
         if (!statsBox.getChildren().isEmpty()) {
             buffView.getChildren().add(statsBox);
