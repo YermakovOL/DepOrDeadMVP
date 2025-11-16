@@ -24,8 +24,15 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
+// --- НОВЫЕ ИМПОРТЫ ДЛЯ РАБОТЫ С ФАЙЛАМИ ---
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+// --- КОНЕЦ НОВЫХ ИМПОРТОВ ---
+
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -100,6 +107,9 @@ public class Main extends Application {
     private Text battleC2Stats;
     private Button battleButton;
 
+    // --- НОВОЕ ПОЛЕ: Путь к внешним файлам данных ---
+    private static Path externalDataPath;
+
 
     public static void main(String[] args) {
         launch(args);
@@ -111,7 +121,13 @@ public class Main extends Application {
         I18n.setLocale(args.isEmpty() ? "ru" : args.get(0));
 
         try {
-            loadDataWithJackson();
+            // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Определяем путь и загружаем данные ---
+            // Узнаем, где находится .jar или .exe
+            externalDataPath = Path.of(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getParent();
+
+            loadDataWithJackson(); // Этот метод теперь проверяет и копирует файлы
+            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
         } catch (Exception e) {
             e.printStackTrace();
             showError(I18n.getString("error.critical"), String.format(I18n.getString("error.dataLoad"), e.getMessage()));
@@ -123,7 +139,6 @@ public class Main extends Application {
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(10));
 
-        // --- 1. ВЕРХНЯЯ ЧАСТЬ (СУЩЕСТВА, ШКАЛЫ, СТОПКИ) ---
         creature1Pane = createCreaturePane(creature1State);
         creature2Pane = createCreaturePane(creature2State);
 
@@ -160,7 +175,6 @@ public class Main extends Application {
         );
         root.setTop(topArea);
 
-        // --- 2. НИЖНЯЯ ЧАСТЬ (ИНФО, РУКА, КНОПКА) ---
         VBox mainBottomArea = new VBox(10);
         mainBottomArea.setPadding(new Insets(10, 5, 5, 5));
         mainBottomArea.setAlignment(Pos.CENTER);
@@ -201,10 +215,9 @@ public class Main extends Application {
         bottomBar.setPadding(new Insets(10, 0, 0, 0));
 
         mainBottomArea.getChildren().addAll(turnPointsText, handScroll, bottomBar);
-        VBox.setVgrow(handScroll, Priority.ALWAYS); // Рука растягивается
+        VBox.setVgrow(handScroll, Priority.ALWAYS);
 
         root.setBottom(mainBottomArea);
-        // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
         updateHandDisplay();
 
@@ -1058,17 +1071,23 @@ public class Main extends Application {
         a.showAndWait();
     }
 
-    private void loadDataWithJackson() throws IOException {
+    private void loadDataWithJackson() throws IOException, URISyntaxException {
+        createDefaultDataFileIfMissing(CREATURES_FILE);
+        createDefaultDataFileIfMissing(INFLUENCE_FILE);
+
+        Path creaturesPath = externalDataPath.resolve(CREATURES_FILE);
+        Path influencePath = externalDataPath.resolve(INFLUENCE_FILE);
+
         ObjectMapper mapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
         List<CardData> creatureList = mapper.readValue(
-                getResourceStream(CREATURES_FILE),
+                Files.newInputStream(creaturesPath),
                 new TypeReference<>() {}
         );
 
         List<CardData> influenceList = mapper.readValue(
-                getResourceStream(INFLUENCE_FILE),
+                Files.newInputStream(influencePath),
                 new TypeReference<>() {}
         );
 
@@ -1080,6 +1099,20 @@ public class Main extends Application {
         for (CardData c : influenceList) allCards.put(c.id, c);
     }
 
+    private void createDefaultDataFileIfMissing(String fileName) throws IOException {
+        Path externalPath = externalDataPath.resolve(fileName);
+
+        if (Files.notExists(externalPath)) {
+            try (InputStream resourceStream = getResourceStream(fileName)) {
+                if (resourceStream == null) {
+                    throw new IOException("Внутренний ресурс не найден: " + fileName);
+                }
+                Files.copy(resourceStream, externalPath);
+            } catch (Exception e) {
+                throw new IOException("Не удалось создать внешний файл: " + fileName, e);
+            }
+        }
+    }
 
     private InputStream getResourceStream(String filename) throws IOException {
         InputStream is = Main.class.getResourceAsStream("/" + filename);
