@@ -1,182 +1,84 @@
 [
   {
     "id": "n1",
-    "name": {
-      "ru": "Крестьянин",
-      "en": "Peasant"
-    },
-    "text": {
-      "ru": "Простой работяга. Ограничение RP — не больше 5.",
-      "en": "A simple worker. RP limit — no more than 5."
-    },
-    "health": 10,
-    "attack": 1,
-    "defense": 0,
-    "ratePoints": 1
+    "name": { "ru": "Крестьянин", "en": "Peasant" },
+    "text": { "ru": "Простой работяга. Ограничение RP — не больше 5.", "en": "A simple worker. RP limit — no more than 5." },
+    "health": 10, "attack": 1, "defense": 0, "ratePoints": 1,
+    "rpLimit": 5
   },
   {
     "id": "n2",
-    "name": {
-      "ru": "Жирный бес",
-      "en": "Fat Imp"
-    },
-    "text": {
-      "ru": "Чем толще становится, тем больше странных бонусов.",
-      "en": "The fatter he grows, the stranger his bonuses."
-    },
-    "health": 15,
-    "attack": 1,
-    "defense": 2,
-    "ratePoints": 2
+    "name": { "ru": "Жирный бес", "en": "Fat Imp" },
+    "text": { "ru": "Чем толще становится, тем больше странных бонусов.", "en": "The fatter he grows, the stranger his bonuses." },
+    "health": 5, "attack": 1, "defense": 0, "ratePoints": 2,
+    "dynamicStats": [
+      { "thresholdHp": 15, "effects": [ {"op": "inc", "path": "/defense", "value": 2}, {"op": "inc", "path": "/ratePoints", "value": -2} ] },
+      { "thresholdHp": 25, "effects": [ {"op": "inc", "path": "/defense", "value": 2}, {"op": "inc", "path": "/attack", "value": -3}, {"op": "inc", "path": "/ratePoints", "value": -2} ] }
+    ]
   },
   {
     "id": "n3",
-    "name": {
-      "ru": "Вор",
-      "en": "Thief"
-    },
-    "text": {
-      "ru": "Если выживает, крадет 400 победных очков у самого богатого игрока.",
-      "en": "If he survives, he steals 400 victory points from the richest player."
-    },
-    "health": 14,
-    "attack": 3,
-    "defense": 0,
-    "ratePoints": 2
+    "name": { "ru": "Вор", "en": "Thief" },
+    "text": { "ru": "Если выживает, крадет 400 победных очков у игрока, получившего наибольший выигрыш в этом бою.", "en": "If he survives, he steals 400 victory points from the player with the highest winnings in this battle." },
+    "health": 14, "attack": 3, "defense": 0, "ratePoints": 2,
+    "thief": true
   },
   {
     "id": "n4",
-    "name": {
-      "ru": "Послушник",
-      "en": "Acolyte"
-    },
-    "text": {
-      "ru": "Юный маг с барьером силы 6.",
-      "en": "A young mage with a barrier strength of 6."
-    },
-    "health": 12,
-    "attack": 2,
-    "defense": 0,
-    "ratePoints": 2
+    "name": { "ru": "Послушник", "en": "Acolyte" },
+    "text": { "ru": "Юный маг с барьером силы 6.", "en": "A young mage with a barrier strength of 6." },
+    "health": 12, "attack": 2, "defense": 0, "ratePoints": 2,
+    "magicBarrier": 1
   },
   {
     "id": "n5",
-    "name": {
-      "ru": "Орк-пьяница",
-      "en": "Drunk Orc"
-    },
-    "text": {
-      "ru": "Шатается так сильно, что на 1 и 2 броска всегда промах.",
-      "en": "Stumbles so much that rolls of 1 and 2 always miss."
-    },
-    "health": 18,
-    "attack": 3,
-    "defense": 1,
-    "ratePoints": 2
+    "name": { "ru": "Орк-пьяница", "en": "Drunk Orc" },
+    "text": { "ru": "Шатается так сильно, что на 1 и 2 броска всегда промах.", "en": "Stumbles so much that rolls of 1 and 2 always miss." },
+    "health": 18, "attack": 3, "defense": 1, "ratePoints": 2,
+    "missChance": [1, 2]
   },
   {
     "id": "n6",
-    "name": {
-      "ru": "Дварф-страж",
-      "en": "Dwarf Guard"
-    },
-    "text": {
-      "ru": "Оглушающий удар срабатывает при броске 6.",
-      "en": "A stunning blow triggers on a roll of 6."
-    },
-    "health": 20,
-    "attack": 2,
-    "defense": 2,
-    "ratePoints": 3
+    "name": { "ru": "Дварф-страж", "en": "Dwarf Guard" },
+    "text": { "ru": "Оглушающий удар срабатывает при броске 6.", "en": "A stunning blow triggers on a roll of 6." },
+    "health": 20, "attack": 2, "defense": 2, "ratePoints": 3,
+    "stunChance": [6]
   },
   {
     "id": "n7",
-    "name": {
-      "ru": "Вампир",
-      "en": "Vampire"
-    },
-    "text": {
-      "ru": "Вампиризм силой 3.",
-      "en": "Vampirism value 3."
-    },
-    "health": 12,
-    "attack": 3,
-    "defense": 1,
-    "ratePoints": 2
+    "name": { "ru": "Вампир", "en": "Vampire" },
+    "text": { "ru": "Вампиризм силой 3.", "en": "Vampirism value 3." },
+    "health": 12, "attack": 3, "defense": 1, "ratePoints": 2,
+    "vampirism": 3
   },
   {
     "id": "n8",
-    "name": {
-      "ru": "Ведьма",
-      "en": "Witch"
-    },
-    "text": {
-      "ru": "За сделанные ставки дарует особую карту влияния.",
-      "en": "Grants a special influence card for placed bets."
-    },
-    "health": 10,
-    "attack": 2,
-    "defense": 0,
-    "ratePoints": 3
+    "name": { "ru": "Ведьма", "en": "Witch" },
+    "text": { "ru": "За сделанные ставки дарует особую карту влияния.", "en": "Grants a special influence card for placed bets." },
+    "health": 10, "attack": 2, "defense": 0, "ratePoints": 3
   },
   {
     "id": "n9",
-    "name": {
-      "ru": "Минотавр",
-      "en": "Minotaur"
-    },
-    "text": {
-      "ru": "Несется вперед без раздумий, как живой таран.",
-      "en": "Charges forward without thinking, like a living battering ram."
-    },
-    "health": 28,
-    "attack": 5,
-    "defense": 2,
-    "ratePoints": 6
+    "name": { "ru": "Минотавр", "en": "Minotaur" },
+    "text": { "ru": "Несется вперед без раздумий, как живой таран.", "en": "Charges forward without thinking, like a living battering ram." },
+    "health": 28, "attack": 5, "defense": 2, "ratePoints": 6
   },
   {
     "id": "n10",
-    "name": {
-      "ru": "Архимаг",
-      "en": "Archmage"
-    },
-    "text": {
-      "ru": "Кастует заклинания, реагируя на каждый бросок. Мощный контролирующий маг.",
-      "en": "Casts spells in response to each roll. A powerful controlling mage."
-    },
-    "health": 14,
-    "attack": 2,
-    "defense": 1,
-    "ratePoints": 4
+    "name": { "ru": "Архимаг", "en": "Archmage" },
+    "text": { "ru": "Кастует заклинания, реагируя на каждый бросок. Мощный контролирующий маг.", "en": "Casts spells in response to each roll. A powerful controlling mage." },
+    "health": 14, "attack": 2, "defense": 1, "ratePoints": 4
   },
   {
     "id": "n11",
-    "name": {
-      "ru": "Паровой робот",
-      "en": "Steam Robot"
-    },
-    "text": {
-      "ru": "Работает на угле. Если топлива не хватит — автоматически проигрывает.",
-      "en": "Runs on coal. If it runs out, it loses instantly."
-    },
-    "health": 22,
-    "attack": 4,
-    "defense": 3,
-    "ratePoints": 5
+    "name": { "ru": "Паровой робот", "en": "Steam Robot" },
+    "text": { "ru": "Работает на угле. Если топлива не хватит — автоматически проигрывает.", "en": "Runs on coal. If it runs out, it loses instantly." },
+    "health": 22, "attack": 4, "defense": 3, "ratePoints": 5
   },
   {
     "id": "n12",
-    "name": {
-      "ru": "Боевая панда",
-      "en": "Battle Panda"
-    },
-    "text": {
-      "ru": "Использует пять стилей: пьяный, сумасшедший, спящий, больной и разумный.",
-      "en": "Uses five styles: drunken, insane, sleeping, sick, and mindful."
-    },
-    "health": 16,
-    "attack": 3,
-    "defense": 1,
-    "ratePoints": 4
+    "name": { "ru": "Боевая панда", "en": "Battle Panda" },
+    "text": { "ru": "Использует пять стилей: пьяный, сумасшедший, спящий, больной и разумный.", "en": "Uses five styles: drunken, insane, sleeping, sick, and mindful." },
+    "health": 16, "attack": 3, "defense": 1, "ratePoints": 4
   }
 ]

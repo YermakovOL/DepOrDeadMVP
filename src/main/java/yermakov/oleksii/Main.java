@@ -181,9 +181,9 @@ public class Main extends Application {
         endTurnBtn.setOnAction(e -> endTurn());
 
         player1ScoreText = new Text();
-        player1ScoreText.getStyleClass().addAll("score-text", "text-p1"); // По умолчанию P1 стиль
+        player1ScoreText.getStyleClass().addAll("score-text", "text-p1");
         player2ScoreText = new Text();
-        player2ScoreText.getStyleClass().addAll("score-text", "text-p2"); // По умолчанию P2 стиль
+        player2ScoreText.getStyleClass().addAll("score-text", "text-p2");
         updatePlayerTotalScores();
 
         Region spacerLeft = new Region();
@@ -225,6 +225,10 @@ public class Main extends Application {
         }
         creature1State = new CreatureState(creatureTemplates.get(0));
         creature2State = new CreatureState(creatureTemplates.get(1));
+
+        // Инициализация динамических статов перед игрой (если вдруг старт с 15HP и т.д.)
+        creature1State.recalculateDynamicStats();
+        creature2State.recalculateDynamicStats();
 
         buildPlayableDeck();
 
@@ -284,7 +288,6 @@ public class Main extends Application {
                 currentRound, config.MAX_ROUNDS_PER_BATTLE,
                 playerLabel, currentTurnPointsUsed, config.MAX_TURN_POINTS));
 
-        // --- Цветовое выделение хода ---
         turnPointsText.getStyleClass().removeAll("text-p1", "text-p2");
         if (currentPlayer == Player.PLAYER_1) {
             turnPointsText.getStyleClass().add("text-p1");
@@ -326,8 +329,6 @@ public class Main extends Application {
         battleDialog = new Alert(Alert.AlertType.NONE);
         battleDialog.setTitle(I18n.getString("battle.dialogTitle"));
         battleDialog.getDialogPane().getStylesheets().add(makeCss());
-
-        // --- УВЕЛИЧЕН РАЗМЕР ДИАЛОГА ---
         battleDialog.getDialogPane().setPrefSize(900, 600);
 
         battleDialog.getButtonTypes().add(ButtonType.CLOSE);
@@ -350,11 +351,10 @@ public class Main extends Application {
         battleLogContainer.setAlignment(Pos.TOP_CENTER);
 
         battleLogScroll = new ScrollPane(battleLogContainer);
-        battleLogScroll.setPrefHeight(450); // Увеличена высота скролла
+        battleLogScroll.setPrefHeight(450);
         battleLogScroll.setFitToWidth(true);
         battleLogScroll.getStyleClass().add("battle-log-scroll");
 
-        // --- АВТОМАТИЧЕСКАЯ ПРОКРУТКА ВНИЗ ---
         battleLogContainer.heightProperty().addListener((observable, oldValue, newValue) -> {
             battleLogScroll.setVvalue(1.0);
         });
@@ -367,15 +367,8 @@ public class Main extends Application {
         battlePane.setCenter(centerContent);
 
         addBattleLog(I18n.getString("battle.start"));
-        if (creature1State.currentAttack == creature2State.currentAttack) {
-            addBattleLog(I18n.getString("battle.initiative.tie"));
-            addBattleLog(String.format(I18n.getString("battle.initiative.tie.even").contains("Четное") ?
-                            (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")) :
-                            (battleAttacker == creature1State ? I18n.getString("battle.initiative.tie.even") : I18n.getString("battle.initiative.tie.odd")),
-                    0, battleAttacker.getLocalizedName()));
-        } else {
-            addBattleLog(String.format(I18n.getString("battle.initiative.attack"), battleAttacker.getLocalizedName(), battleAttacker.currentAttack));
-        }
+
+        addBattleLog(String.format(I18n.getString("battle.initiative.attack"), battleAttacker.getLocalizedName(), battleAttacker.currentAttack));
 
         battleDialog.getDialogPane().setContent(battlePane);
 
@@ -387,22 +380,78 @@ public class Main extends Application {
     }
 
     private void playBattleStep() {
+        // --- STUN CHECK (Пропуск хода) ---
+        if (battleAttacker.isStunned) {
+            addBattleLog(String.format(I18n.getString("battle.stun.skip"), battleAttacker.getLocalizedName()));
+            battleAttacker.isStunned = false; // Оглушение снимается после пропуска
+            swapTurn();
+            return;
+        }
+
+        // --- БРОСОК КУБИКОВ ПО ОДНОМУ ---
         int diceCount = getDiceCount(battleAttacker.currentAttack);
-        int rawDamage = DiceUtils.rollD6(diceCount);
+        List<Integer> successfulDice = new ArrayList<>();
+        List<Integer> rawRolls = new ArrayList<>();
+
+        for (int i = 0; i < diceCount; i++) {
+            int roll = DiceUtils.rollD6(1);
+            rawRolls.add(roll);
+
+            // 1. Промах (Орк)
+            if (battleAttacker.missChance != null && battleAttacker.missChance.contains(roll)) {
+                addBattleLog(String.format(I18n.getString("battle.miss"), (i+1), roll));
+                continue;
+            }
+
+            // 2. Оглушающий удар (Дварф)
+            if (battleAttacker.stunChance != null && battleAttacker.stunChance.contains(roll)) {
+                addBattleLog(String.format(I18n.getString("battle.stun.trigger"), (i+1), roll));
+                battleDefender.isStunned = true;
+            }
+
+            successfulDice.add(roll);
+        }
+
+        // --- МАГИЧЕСКИЙ БАРЬЕР (Поглощает один максимальный кубик) ---
+        if (battleDefender.magicBarrier > 0 && !successfulDice.isEmpty()) {
+            // Ищем максимальный кубик, чтобы его заблокировать
+            int maxDie = Collections.max(successfulDice);
+            successfulDice.remove(Integer.valueOf(maxDie));
+            battleDefender.magicBarrier--;
+            addBattleLog(String.format(I18n.getString("battle.barrier.absorb"),
+                    battleDefender.getLocalizedName(), maxDie));
+        }
+
+        // --- СУММА УРОНА ---
+        int rawDamage = successfulDice.stream().mapToInt(Integer::intValue).sum();
+
+        // --- ЗАЩИТА ---
         int defenderDefense = battleDefender.currentDefense;
         int damageReduction = getDefenseBlock(defenderDefense);
         int finalDamage = Math.max(0, rawDamage - damageReduction);
 
         battleDefender.currentHealth -= finalDamage;
+        // ВНИМАНИЕ: Здесь НЕ вызываем recalculateDynamicStats(), так как бонусы не должны меняться в бою
 
         addBattleLog("---");
-        addBattleLog(String.format(I18n.getString("battle.attack.roll"),
-                battleAttacker.getLocalizedName(), battleAttacker.currentAttack, diceCount, rawDamage));
-        addBattleLog(String.format(I18n.getString("battle.defense.block"),
-                battleDefender.getLocalizedName(), defenderDefense, damageReduction));
+        addBattleLog(String.format(I18n.getString("battle.log.attack"),
+                battleAttacker.getLocalizedName(), rawRolls.toString(), rawDamage));
 
-        addBattleLog(String.format(I18n.getString("battle.defense.result"),
+        if (damageReduction > 0) {
+            addBattleLog(String.format(I18n.getString("battle.log.defense"),
+                    battleDefender.getLocalizedName(), damageReduction));
+        }
+
+        addBattleLog(String.format(I18n.getString("battle.log.result"),
                 finalDamage, battleDefender.getLocalizedName(), Math.max(0, battleDefender.currentHealth)));
+
+        // --- ВАМПИРИЗМ ---
+        if (battleAttacker.vampirism > 0 && finalDamage > 0) {
+            battleAttacker.currentHealth += battleAttacker.vampirism;
+            // Тут тоже не пересчитываем статы, даже если HP выросло
+            addBattleLog(String.format(I18n.getString("battle.vampirism"),
+                    battleAttacker.getLocalizedName(), battleAttacker.vampirism));
+        }
 
         battleC1Stats.setText(getCreatureBattleStats(creature1State));
         battleC2Stats.setText(getCreatureBattleStats(creature2State));
@@ -416,6 +465,10 @@ public class Main extends Application {
             return;
         }
 
+        swapTurn();
+    }
+
+    private void swapTurn() {
         CreatureState temp = battleAttacker;
         battleAttacker = battleDefender;
         battleDefender = temp;
@@ -427,11 +480,12 @@ public class Main extends Application {
 
     private void processBattleResults(CreatureState winner) {
         String winnerName = winner.getLocalizedName();
-        int p1WinningsFromWinner = 0;
-        int p1LossesFromLoser = 0;
-        int p2WinningsFromWinner = 0;
-        int p2LossesFromLoser = 0;
         RewardTier winnerTier;
+
+        int p1WinningsFromWinner = 0;
+        int p2WinningsFromWinner = 0;
+        int p1LossesFromLoser = 0;
+        int p2LossesFromLoser = 0;
 
         if (winner == creature1State) {
             winnerName = creature1State.getLocalizedName();
@@ -457,18 +511,29 @@ public class Main extends Application {
         int player1NetProfit = p1WinningsFromWinner - p1LossesFromLoser;
         int player2NetProfit = p2WinningsFromWinner - p2LossesFromLoser;
 
+        // --- ЛОГИКА ВОРА ---
+        // Если победитель - Вор (thief=true), он крадет 400 у самого прибыльного.
+        if (winner.thief) {
+            if (player1NetProfit > player2NetProfit) {
+                player1NetProfit -= 400;
+                // Показываем сообщение о краже? Можно в диалоге победы.
+            } else if (player2NetProfit > player1NetProfit) {
+                player2NetProfit -= 400;
+            }
+            // Если равны, никто не крадет? По логике "больше", да.
+        }
+
         player1TotalScore += player1NetProfit;
         player2TotalScore += player2NetProfit;
-        updatePlayerTotalScores();
 
-        showEndGameDialog(winnerName, player1NetProfit, player2NetProfit, winnerTier);
+        updatePlayerTotalScores();
+        showEndGameDialog(winnerName, player1NetProfit, player2NetProfit, winnerTier, winner.thief);
     }
 
     private void addBattleLog(String message) {
         Text text = new Text(message);
         text.getStyleClass().add("battle-log-text");
         battleLogContainer.getChildren().add(text);
-        // Скроллинг теперь обрабатывается через listener в startBattle
     }
 
     private String getCreatureBattleStats(CreatureState state) {
@@ -478,13 +543,17 @@ public class Main extends Application {
                 String.format(I18n.getString("battle.statsHeader.bonus"), state.getLocalizedName(), displayHealth, state.currentRatePoints, state.bonusRatePoints) :
                 String.format(I18n.getString("battle.statsHeader"), state.getLocalizedName(), displayHealth);
 
+        String specials = "";
+        if (state.magicBarrier > 0) specials += " [Barrier: " + state.magicBarrier + "]";
+        if (state.isStunned) specials += " [STUN]";
+
         return rpString +
                 "\n" +
                 String.format(" ATK: %d (%s)", state.currentAttack, I18n.getString("label.diceLabel." + getDiceCount(state.currentAttack))) +
                 "\n" +
                 String.format(" DEF: %d (%s)", state.currentDefense, I18n.getString("label.defenseBlock." + getDefenseBlock(state.currentDefense))) +
                 "\n" +
-                String.format(" RP: %d (%s)", state.getTotalRP(), state.getLocalizedName());
+                String.format(" RP: %d (%s)", state.getTotalRP(), state.getLocalizedName()) + specials;
     }
 
     private RewardTier getRewardTier(CreatureState betOn, CreatureState opponent) {
@@ -535,7 +604,7 @@ public class Main extends Application {
         return 3;
     }
 
-    private void showEndGameDialog(String winnerName, int p1NetProfit, int p2NetProfit, RewardTier tier) {
+    private void showEndGameDialog(String winnerName, int p1NetProfit, int p2NetProfit, RewardTier tier, boolean thiefTriggered) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle(I18n.getString("game.endTitle"));
@@ -556,6 +625,15 @@ public class Main extends Application {
             grid.add(p1Amount, 1, 0);
             grid.add(p2Label, 0, 1);
             grid.add(p2Amount, 1, 1);
+
+            if (thiefTriggered) {
+                String victim = (p1NetProfit < p2NetProfit) ? I18n.getString("label.player2") : I18n.getString("label.player1");
+                // Если прибыли равны, вор не сработал по логике "строго больше", но можно доработать.
+                // Добавим сообщение
+                Label thiefMsg = new Label(String.format(I18n.getString("battle.thief.effect"), victim));
+                thiefMsg.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                grid.add(thiefMsg, 0, 2, 2, 1);
+            }
 
             alert.getDialogPane().setContent(grid);
             alert.getDialogPane().getStylesheets().add(makeCss());
@@ -753,26 +831,19 @@ public class Main extends Application {
 
                 int costToPlay = cd.cost;
 
-                // Сначала проверяем, хватает ли очков (но не списываем их пока!)
                 if (currentTurnPointsUsed + costToPlay <= config.MAX_TURN_POINTS) {
 
-                    // Получаем состояние существа ДО списания очков, чтобы проверить блокировку
                     CreatureState currentState = (CreatureState) targetPane.getUserData();
 
-                    // --- ПРОВЕРКА БЛОКИРОВКИ СТАВОК ---
                     if ("bet".equals(mode)) {
-                        // Проверяем, заблокировано ли существо для ставок
                         if (currentRound <= currentState.bettingBlockedUntilRound) {
-                            // Показываем ошибку и ПРЕРЫВАЕМ выполнение, НЕ списывая очки
                             showInfo(String.format(I18n.getString("error.bettingBlocked"), currentState.getLocalizedName()));
                             ev.setDropCompleted(false);
                             ev.consume();
                             return;
                         }
                     }
-                    // ----------------------------------------------------
 
-                    // Только если проверки пройдены — списываем очки и удаляем карту
                     currentTurnPointsUsed += costToPlay;
                     updateTurnPointsText();
                     removeCardFromHandById(cardId);
@@ -1444,7 +1515,6 @@ public class Main extends Application {
               -fx-font-size: 16px;
               -fx-font-weight: bold;
             }
-            /* --- НОВЫЕ СТИЛИ ДЛЯ ИГРОКОВ --- */
             .text-p1 { -fx-fill: #0078D7; }
             .text-p2 { -fx-fill: #E50000; }
 
@@ -1508,6 +1578,15 @@ public class Main extends Application {
         public Integer count;
         public List<Effect> effects;
 
+        // --- Новые поля для свойств существ ---
+        public Integer rpLimit;
+        public Integer magicBarrier;
+        public Integer vampirism;
+        public List<Integer> missChance;
+        public List<Integer> stunChance;
+        public boolean thief;
+        public List<DynamicStatConfig> dynamicStats;
+
         public CardData() {
             this.effects = new ArrayList<>();
             this.name = new HashMap<>();
@@ -1544,6 +1623,11 @@ public class Main extends Application {
         }
     }
 
+    public static class DynamicStatConfig {
+        public int thresholdHp;
+        public List<Effect> effects;
+    }
+
     public static class Effect {
         public String op;
         public String path;
@@ -1566,6 +1650,21 @@ public class Main extends Application {
         public int bonusRatePoints;
         public int bettingBlockedUntilRound = 0;
 
+        // --- Поля для новых механик ---
+        public int rpLimit = 0;
+        public int magicBarrier = 0;
+        public int vampirism = 0;
+        public List<Integer> missChance;
+        public List<Integer> stunChance;
+        public boolean thief = false;
+        public List<DynamicStatConfig> dynamicStats;
+        public boolean isStunned = false;
+
+        // Для отката динамических статов
+        private int dynamicBonusAttack = 0;
+        private int dynamicBonusDefense = 0;
+        private int dynamicBonusRP = 0;
+
         public CreatureState(CardData baseCard) {
             this.baseCard = baseCard;
             this.name = baseCard.getLocalizedName();
@@ -1579,6 +1678,51 @@ public class Main extends Application {
             this.baseRatePoints = baseCard.ratePoints;
             this.currentRatePoints = baseCard.ratePoints;
             this.bonusRatePoints = 0;
+
+            // Загрузка особенностей
+            this.rpLimit = (baseCard.rpLimit != null) ? baseCard.rpLimit : 0;
+            this.magicBarrier = (baseCard.magicBarrier != null) ? baseCard.magicBarrier : 0;
+            this.vampirism = (baseCard.vampirism != null) ? baseCard.vampirism : 0;
+            this.missChance = baseCard.missChance;
+            this.stunChance = baseCard.stunChance;
+            this.thief = baseCard.thief;
+            this.dynamicStats = baseCard.dynamicStats;
+        }
+
+        public void recalculateDynamicStats() {
+            if (dynamicStats == null || dynamicStats.isEmpty()) return;
+
+            // 1. Откат старых бонусов
+            this.currentAttack -= dynamicBonusAttack;
+            this.currentDefense -= dynamicBonusDefense;
+            this.currentRatePoints -= dynamicBonusRP;
+
+            dynamicBonusAttack = 0;
+            dynamicBonusDefense = 0;
+            dynamicBonusRP = 0;
+
+            // 2. Расчет новых бонусов на основе текущего HP
+            for (DynamicStatConfig cfg : dynamicStats) {
+                if (this.currentHealth >= cfg.thresholdHp && cfg.effects != null) {
+                    for (Effect e : cfg.effects) {
+                        if ("inc".equals(e.op) && e.value != null) {
+                            switch (e.path) {
+                                case "/attack": dynamicBonusAttack += e.value; break;
+                                case "/defense": dynamicBonusDefense += e.value; break;
+                                case "/ratePoints": dynamicBonusRP += e.value; break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Применение
+            this.currentAttack = Math.max(1, this.currentAttack + dynamicBonusAttack);
+            this.currentDefense = Math.max(0, this.currentDefense + dynamicBonusDefense);
+
+            int newRP = this.currentRatePoints + dynamicBonusRP;
+            if (rpLimit > 0) newRP = Math.min(newRP, rpLimit);
+            this.currentRatePoints = Math.max(1, newRP);
         }
 
         public String getLocalizedName() {
