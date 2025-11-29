@@ -17,6 +17,10 @@ public class PatchUtils {
                 applyDecBet(mainApp, effect.path, effect.value, targetBetId);
                 break;
 
+            case "apply_status":
+                applyStatus(mainApp, creature, effect.path, effect.value);
+                break;
+
             default:
                 // Игнорируем пустые "op"
                 if (!effect.op.isEmpty()) {
@@ -70,5 +74,18 @@ public class PatchUtils {
         }
 
         mainApp.updateBetDisplays();
+    }
+
+    private static void applyStatus(Main mainApp, Main.CreatureState creature, String path, int value) {
+        if ("/block_betting".equals(path)) {
+            // Если ходит Игрок 1: блокируем до конца ТЕКУЩЕГО раунда (оппонент еще не ходил).
+            // Если ходит Игрок 2: блокируем до конца СЛЕДУЮЩЕГО раунда (оппонент уже походил).
+            // value игнорируем или считаем за 1 (базовая длительность)
+            int roundOffset = (mainApp.currentPlayer == Main.Player.PLAYER_1) ? 0 : 1;
+
+            creature.bettingBlockedUntilRound = mainApp.currentRound + roundOffset;
+        } else {
+            System.err.println(String.format(I18n.getString("error.unknownPath"), path));
+        }
     }
 }

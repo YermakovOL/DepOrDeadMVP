@@ -291,5 +291,28 @@
       { "op": "dec_bet", "path": "/opponent_bets", "value": 100 }
     ],
     "count": 5
+  },
+  {
+    "id": "i40",
+    "name": { "ru": "Заморозка ставок", "en": "Bet Freeze" },
+    "text": { "ru": "Ставки на этого бойца заморожены до конца следующего раунда.", "en": "Betting on this fighter is frozen until the end of the next round." },
+    "cost": 4,
+    "betAmount": 0,
+    "effects": [
+      { "op": "apply_status", "path": "/block_betting", "value": 1 }
+    ],
+    "count": 2
+  },
+  {
+    "id": "i41",
+    "name": { "ru": "Тайный сговор", "en": "Secret Collusion" },
+    "text": { "ru": "Снижает RP бойца. Замораживает ставки на него до конца следующего раунда.", "en": "Reduces fighter's RP. Freezes bets on him until the end of the next round." },
+    "cost": 4,
+    "betAmount": 0,
+    "effects": [
+      { "op": "inc", "path": "/ratePoints", "value": -3 },
+      { "op": "apply_status", "path": "/block_betting", "value": 1 }
+    ],
+    "count": 2
   }
 ]

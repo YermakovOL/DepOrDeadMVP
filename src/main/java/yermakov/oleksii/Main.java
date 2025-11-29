@@ -181,9 +181,9 @@ public class Main extends Application {
         endTurnBtn.setOnAction(e -> endTurn());
 
         player1ScoreText = new Text();
-        player1ScoreText.getStyleClass().add("score-text");
+        player1ScoreText.getStyleClass().addAll("score-text", "text-p1"); // По умолчанию P1 стиль
         player2ScoreText = new Text();
-        player2ScoreText.getStyleClass().add("score-text");
+        player2ScoreText.getStyleClass().addAll("score-text", "text-p2"); // По умолчанию P2 стиль
         updatePlayerTotalScores();
 
         Region spacerLeft = new Region();
@@ -283,6 +283,14 @@ public class Main extends Application {
                 currentBattle, config.MAX_BATTLES,
                 currentRound, config.MAX_ROUNDS_PER_BATTLE,
                 playerLabel, currentTurnPointsUsed, config.MAX_TURN_POINTS));
+
+        // --- Цветовое выделение хода ---
+        turnPointsText.getStyleClass().removeAll("text-p1", "text-p2");
+        if (currentPlayer == Player.PLAYER_1) {
+            turnPointsText.getStyleClass().add("text-p1");
+        } else {
+            turnPointsText.getStyleClass().add("text-p2");
+        }
     }
 
     public void updateBetDisplays() {
@@ -318,7 +326,9 @@ public class Main extends Application {
         battleDialog = new Alert(Alert.AlertType.NONE);
         battleDialog.setTitle(I18n.getString("battle.dialogTitle"));
         battleDialog.getDialogPane().getStylesheets().add(makeCss());
-        battleDialog.getDialogPane().setPrefWidth(700);
+
+        // --- УВЕЛИЧЕН РАЗМЕР ДИАЛОГА ---
+        battleDialog.getDialogPane().setPrefSize(900, 600);
 
         battleDialog.getButtonTypes().add(ButtonType.CLOSE);
         battleDialog.getDialogPane().lookupButton(ButtonType.CLOSE).setVisible(false);
@@ -340,9 +350,14 @@ public class Main extends Application {
         battleLogContainer.setAlignment(Pos.TOP_CENTER);
 
         battleLogScroll = new ScrollPane(battleLogContainer);
-        battleLogScroll.setPrefHeight(250);
+        battleLogScroll.setPrefHeight(450); // Увеличена высота скролла
         battleLogScroll.setFitToWidth(true);
         battleLogScroll.getStyleClass().add("battle-log-scroll");
+
+        // --- АВТОМАТИЧЕСКАЯ ПРОКРУТКА ВНИЗ ---
+        battleLogContainer.heightProperty().addListener((observable, oldValue, newValue) -> {
+            battleLogScroll.setVvalue(1.0);
+        });
 
         battleButton = new Button(I18n.getString("button.fight"));
         battleButton.setOnAction(e -> playBattleStep());
@@ -410,7 +425,6 @@ public class Main extends Application {
         stepDelay.play();
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Логика Чистой Прибыли ---
     private void processBattleResults(CreatureState winner) {
         String winnerName = winner.getLocalizedName();
         int p1WinningsFromWinner = 0;
@@ -449,16 +463,12 @@ public class Main extends Application {
 
         showEndGameDialog(winnerName, player1NetProfit, player2NetProfit, winnerTier);
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void addBattleLog(String message) {
         Text text = new Text(message);
         text.getStyleClass().add("battle-log-text");
         battleLogContainer.getChildren().add(text);
-
-        if (battleLogScroll != null) {
-            battleLogScroll.setVvalue(1.0);
-        }
+        // Скроллинг теперь обрабатывается через listener в startBattle
     }
 
     private String getCreatureBattleStats(CreatureState state) {
@@ -525,7 +535,6 @@ public class Main extends Application {
         return 3;
     }
 
-    // --- ИЗМЕНЕНИЕ: (ЗАПРОС 1) Отображение Чистой Прибыли (Net Profit) ---
     private void showEndGameDialog(String winnerName, int p1NetProfit, int p2NetProfit, RewardTier tier) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -534,7 +543,6 @@ public class Main extends Application {
 
             Label p1Label = new Label(I18n.getString("label.player1") + " " + I18n.getString("game.winnings.simple") + ":");
             Label p1Amount = new Label("" + p1NetProfit);
-            // Если Профит отрицательный, делаем красным. Если положительный - цвет множителя.
             p1Amount.getStyleClass().add(p1NetProfit < 0 ? "reward-red" : "reward-" + tier.name().toLowerCase());
 
             Label p2Label = new Label(I18n.getString("label.player2") + " " + I18n.getString("game.winnings.simple") + ":");
@@ -574,7 +582,6 @@ public class Main extends Application {
             restartGame();
         });
     }
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     private void restartGame() {
         currentRound = 1;
@@ -746,12 +753,29 @@ public class Main extends Application {
 
                 int costToPlay = cd.cost;
 
+                // Сначала проверяем, хватает ли очков (но не списываем их пока!)
                 if (currentTurnPointsUsed + costToPlay <= config.MAX_TURN_POINTS) {
+
+                    // Получаем состояние существа ДО списания очков, чтобы проверить блокировку
+                    CreatureState currentState = (CreatureState) targetPane.getUserData();
+
+                    // --- ПРОВЕРКА БЛОКИРОВКИ СТАВОК ---
+                    if ("bet".equals(mode)) {
+                        // Проверяем, заблокировано ли существо для ставок
+                        if (currentRound <= currentState.bettingBlockedUntilRound) {
+                            // Показываем ошибку и ПРЕРЫВАЕМ выполнение, НЕ списывая очки
+                            showInfo(String.format(I18n.getString("error.bettingBlocked"), currentState.getLocalizedName()));
+                            ev.setDropCompleted(false);
+                            ev.consume();
+                            return;
+                        }
+                    }
+                    // ----------------------------------------------------
+
+                    // Только если проверки пройдены — списываем очки и удаляем карту
                     currentTurnPointsUsed += costToPlay;
                     updateTurnPointsText();
                     removeCardFromHandById(cardId);
-
-                    CreatureState currentState = (CreatureState) targetPane.getUserData();
 
                     if ("buff".equals(mode)) {
                         if (cd.effects != null) {
@@ -1419,8 +1443,11 @@ public class Main extends Application {
             .score-text {
               -fx-font-size: 16px;
               -fx-font-weight: bold;
-              -fx-fill: #333333;
             }
+            /* --- НОВЫЕ СТИЛИ ДЛЯ ИГРОКОВ --- */
+            .text-p1 { -fx-fill: #0078D7; }
+            .text-p2 { -fx-fill: #E50000; }
+
             .reward-yellow { -fx-fill: #FFA500; -fx-font-weight: bold; -fx-font-size: 14px; }
             .reward-green  { -fx-fill: #00A800; -fx-font-weight: bold; -fx-font-size: 14px; }
             .reward-red    { -fx-fill: #E50000; -fx-font-weight: bold; -fx-font-size: 14px; }
@@ -1537,6 +1564,7 @@ public class Main extends Application {
         public int baseRatePoints;
         public int currentRatePoints;
         public int bonusRatePoints;
+        public int bettingBlockedUntilRound = 0;
 
         public CreatureState(CardData baseCard) {
             this.baseCard = baseCard;
